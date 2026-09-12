@@ -32,7 +32,7 @@ namespace DebugPlus.Operations
 
         public abstract float Max { get; }
 
-        /// <summary>滑杆是否只取整数刻度（百分比参数为 true）。</summary>
+        /// <summary>滑条是否只取整数刻度（百分比参数为 true）。</summary>
         public virtual bool WholeNumbers
         {
             get { return false; }

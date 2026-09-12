@@ -36,9 +36,11 @@
   `NullReferenceException` 在 `ParameterRowFactory.CreateSlider` → `ConfigPanel.BuildParamRows`
   （点「修改配置」按钮时）。**定位手段**：`player.log` 栈带 IL 偏移 `[0x0010a]` → `ildasm` 反汇编本 Mod DLL →
   搜到 `IL_010a` 是 `ldloc.s handleRect` + `callvirt RectTransform::set_anchorMin` ⇒
-  手柄的 `handleRect` 是 `null`。**根因**：`NewUIObject` 已挂过 `RectTransform`，
-  建手柄时又 `handle.AddComponent<RectTransform>()` 一次 ⇒ **Unity 返回 `null`（不抛异常）**。
-  修复：改为 `handle.GetComponent<RectTransform>()`（见 §3 教训 8/9）。改的是 `UI/Component/ParameterRowFactory.cs` 一处。
+  滑块的 `handleRect` 是 `null`。**根因**：`NewUIObject` 已挂过 `RectTransform`，
+  建滑块时又 `handle.AddComponent<RectTransform>()` 一次 ⇒ **Unity 返回 `null`（不抛异常）**。
+  修复：改为 `handle.GetComponent<RectTransform>()`（见 §3 教训 8/9）。
+  同一批还做了两件事：**`SliderField` 组件抽出**（A4 重构，用户拍板 A 案）与**滑条尺寸放大**
+  （滑条高 22→**44**、滑块宽 14→**28**、行高 40→**56**、读数宽 56→**64**，用户反馈"太小了，×2 差不多"）。
 
 ## 1. 批 2 施工单：M1 最小链 + 植物生长进度
 
@@ -57,11 +59,11 @@
 **命中判定（批 2b 起）**：不再有任何临时判定，A1 的 Prefix 直接查 `Operations/OperationRegistry.IsConfigurable(go)`，
 与面板的 `BuildParameters` 同源 —— **不在注册表里的实体连按钮都不出现**。批 2a 那句 `go.GetComponent<Growing>() != null` 已删除。
 
-### 批 2b · 能力（出口：暂停下拖滑杆，植物当场变）—— ✅ 已完成（出口待实机）
+### 批 2b · 能力（出口：暂停下拖滑条，植物当场变）—— ✅ 已完成（出口待实机）
 
 | # | 文件 | 内容 | 状态 |
 |---|---|---|---|
-| A4 | `UI/Component/ParameterRow.cs`、`UI/Component/ParameterRowFactory.cs` | 行绑定 + 纯代码建行（标签 TMP + `KSlider` + 读数 TMP）。**滑杆来源定案：纯代码自建 `KSlider`**——原版所有滑杆都来自预制体（`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(sliderPrefab…)`，`sliderPrefab` 是 `[SerializeField]`，mod 拿不到），原版没有"代码自建滑杆"先例；而 `Slider.handleRect` / `fillRect` 是可写公开属性 ⇒ 可自建。⚠️ `KSlider.Awake()` 第一句取 `handleRect.gameObject`（`KSlider.cs:40`）⇒ **先不激活、挂完 handleRect 再激活**。**不用 `KNumberInputField`**：`KInputField.inputField` 是 `[SerializeField] private`、`field` 只读（`KInputField.cs:10-16/105-106`）⇒ 数值改用 TMP 读数。`Bind` 顺序：先设范围/初值、**最后**订阅 `onValueChanged` | ✅ |
+| A4 | `UI/Component/SliderField.cs`（滑条+读数组件）、`UI/Component/ParameterRow.cs`、`UI/Component/ParameterRowFactory.cs` | 行绑定 + 纯代码建行（标签 TMP + `KSlider` + 读数 TMP）。**滑条来源定案：纯代码自建 `KSlider`**——原版所有滑条都来自预制体（`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(sliderPrefab…)`，`sliderPrefab` 是 `[SerializeField]`，mod 拿不到），原版没有"代码自建滑条"先例；而 `Slider.handleRect` / `fillRect` 是可写公开属性 ⇒ 可自建。⚠️ `KSlider.Awake()` 第一句取 `handleRect.gameObject`（`KSlider.cs:40`）⇒ **先不激活、挂完 handleRect 再激活**。**不用 `KNumberInputField`**：`KInputField.inputField` 是 `[SerializeField] private`、`field` 只读（`KInputField.cs:10-16/105-106`）⇒ 数值改用 TMP 读数。顺序：先设范围/初值 → 设格式化 → **最后** `AttachListener()`（`Slider.Set(float,bool)` 是 **protected**，mod 用不了，只能走公开的 `value` 属性 + 延后挂监听） | ✅ |
 | A5 | `Operations/OperationRegistry.cs` | `IOperation` 接口 + 登记表（静态构造里登记 `GrowthOperation`）；`IsConfigurable` / `BuildParameters` **同源**；A1 的临时判定（`GetComponent<Growing>()`）已删除，改查注册表 | ✅ |
 | A6 | `Operations/GrowthOperation.cs` | 取组件照原版 `PlantBranchGrower.cs:402-403`：`GetComponent<IManageGrowingStates>()` 优先、`GetSMI<IManageGrowingStates>()` 兜底（⇒ 植物与树枝类都覆盖，不硬编码 `Growing`）；读 `PercentGrown()×100`、写 `OverrideMaturityLevel(v/100)` —— ⚠️ **写入口收 0–1 比例**（`Growing.cs:54-58`）。**纯写值、零时间依赖** | ✅ |
 | A7b | `STRINGS.cs` | 新增 `PARAM_GROWTH`「生长进度」、`UNIT_PERCENT`「%」；`PANEL_PENDING` 改为 `PANEL_NO_PARAMS`「（该实体暂无可调参数）」（无参数行时才显示） | ✅ |
@@ -116,19 +118,21 @@
 - ⚠️ **`KModalScreen.pause` 默认 `true`**（`KModalScreen.cs:152`）：打开会 `SpeedControlScreen.Pause(false, false)`、关闭会 `Unpause(false)` → **会改掉玩家自己按下的暂停状态，与时间中立铁律冲突 ⇒ 本 Mod 显式设 `false`**。
 - ⚠️ **`Action` 名称冲突**：缺氧自带全局枚举 `Action`（`Action.Escape`/`Action.NumActions`），**命名空间成员优先于 `using System;` 导入** ⇒ 本 Mod 一律写 `System.Action`（原版源码通篇如此，即此原因）。
 
-### 2.3 滑杆素材与生长状态（`Assembly-CSharp` / `firstpass`，2026-09-13 批 2b 核对）
+### 2.3 滑条素材与生长状态（`Assembly-CSharp` / `firstpass`，2026-09-13 批 2b 核对）
 
-- **原版所有滑杆行都来自预制体** ⇒ mod 只能自建：
+- **原版所有滑条行都来自预制体** ⇒ mod 只能自建：
   `MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`、`:37` `component.GetReference<KSlider>("Slider")`；
-  `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用，**mod 拿不到**；原版源码里**没有**"代码自建滑杆"的先例。
+  `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用，**mod 拿不到**；原版源码里**没有**"代码自建滑条"的先例。
 - **`KSlider` 可纯代码构造**：`KSlider : Slider`（`KSlider.cs:8`），需要的 `handleRect` / `fillRect` 是 `Slider` 的**可写公开属性**。
   ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句 `base.handleRect.gameObject.GetComponent<ToolTip>()`
-  ⇒ **handleRect 为空必 NRE** ⇒ 先让滑杆 GameObject **不激活**、挂完 `handleRect`/`fillRect` 再激活。
+  ⇒ **handleRect 为空必 NRE** ⇒ 先让滑条 GameObject **不激活**、挂完 `handleRect`/`fillRect` 再激活。
   另：`onDrag` / `onReleaseHandle` / `onPointerDown` / `onMove` 是 KSlider 自己的事件（`SliderSet.SetupSlider` 用的就是它们）；
   本 Mod 只需连续写值，故用基类 `Slider.onValueChanged`。
+  ⚠️ **`Slider.Set(float, bool)` 是 `family`（protected）**（`UnityEngine.UI.dll` IL 实测）⇒ mod 调不到（CS0122）；
+  程序化设值只能走公开的 `value` 属性，并且**把 `onValueChanged` 的挂载推到设完初值之后**（否则初值会外泄成"用户操作"）。
 - **`KNumberInputField` 不可纯代码构造**：`KInputField.inputField` 为 `[SerializeField] private KInputTextField`，
   `field` 属性只读（`KInputField.cs:10-16 / 105-106`）⇒ 数值改用自建 TMP 读数标签。
-- **原版"滑杆+数值+标签"样板**：`SliderSet.SetupSlider`（`SliderSet.cs:9-33`）、`SetTarget`（`:36-68`）、`SetValue`（`:96-121`）。
+- **原版"滑条+数值+标签"样板**：`SliderSet.SetupSlider`（`SliderSet.cs:9-33`）、`SetTarget`（`:36-68`）、`SetValue`（`:96-121`）。
 - **生长状态的原版取法**（`PlantBranchGrower.cs:402-403`）：`GetComponent<IManageGrowingStates>()` 优先、
   `gameObject.GetSMI<IManageGrowingStates>()` 兜底（树枝类是 SMI 实现）。
   接口定义在 `IManageGrowingStates.cs:10/16`；`Growing` 实现它（`Growing.cs:9`）。
@@ -151,7 +155,7 @@
 7. **Unity 组件的 Awake 陷阱**：往**已激活**的 GameObject 上 `AddComponent` 会立刻跑 Awake，
    若该 Awake 要读尚未赋值的 `[SerializeField]` 式引用就会 NRE ⇒ 需要时"**先 SetActive(false) → 挂好引用 → 再激活**"（本 Mod 建 `KSlider` 用的就是这招）。
 8. 🔴 **`AddComponent<RectTransform>()` 在已有 RectTransform 的 GameObject 上返回 `null`（不抛异常！）**：
-   2026-09-13 实机批 2b 崩溃的直接原因 —— `NewUIObject` 已挂过 RectTransform，建手柄时又 `AddComponent` 一次拿到 `null`，
+   2026-09-13 实机批 2b 崩溃的直接原因 —— `NewUIObject` 已挂过 RectTransform，建滑块时又 `AddComponent` 一次拿到 `null`，
    下一句 `handleRect.anchorMin = …` 才 NRE。**凡是"有没有 RectTransform"不确定的 GO，一律 `GetComponent<RectTransform>()`**。
    （ini-ui 规则 1 本来就写了这条，之前只在 ConfigPanel 里守住了，工厂里漏了 ⇒ 规则要在**每个新建 UI 的辅助方法**里落实。）
 9. **定位 mod 自身 NRE 的正确姿势（本轮验证有效，以后照做）**：
@@ -160,6 +164,9 @@
    ③ 在反汇编里搜 `IL_010a`，看它到底在调谁 —— 本次直接读到 `ldloc.s handleRect` + `callvirt RectTransform::set_anchorMin`
    ⇒ 一秒锁定 `handleRect` 为 null，免去"加日志 → 重编 → 再让用户复现"的多轮往返。
    注意：`Release`（`DebugType=pdbonly` + `optimize+`）的行号不可靠，**以 IL 偏移为准**。
+10. **"能不能调"还要看访问修饰符，不只看字段所有权**：`Slider.Set(float, bool)` 在 IL 里是 `family`（protected）
+   ⇒ mod 编译期直接 CS0122。同类陷阱：想用某"看起来是给代码用"的内部方法前，先 `ildasm` 看修饰符。
+   本 Mod 的规避法：程序化设值走公开 `value` 属性 + **把监听器挂载推迟到设完初值之后**（`SliderField.AttachListener`）。
 
 ## 4. ⏸ 待用户实机验证（未验证前不得当成事实）
 
@@ -172,23 +179,25 @@
 
 批 2b 专项（本轮新增，接在 2a 之后一起看）：
 
-5. 面板里是否出现**「生长进度」一行**（标签 + 滑杆 + 右侧百分比读数），读数与植物当前进度是否对得上（可先看原版植物状态项里的成熟度百分比）。
-6. **拖动滑杆**：读数是否跟着变；**植物当场变化**（外观换图 / 成熟度状态项变化），**无需解暂停**。
-7. 滑杆**能拖、能点**（点滑杆空白处是否直接跳值）；**面板外的点击仍被拦住**；关掉面板后植物状态保持你拖到的值。
+5. 面板里是否出现**「生长进度」一行**（标签 + 滑条 + 右侧百分比读数），读数与植物当前进度是否对得上（可先看原版植物状态项里的成熟度百分比）。
+6. **拖动滑块**：读数是否跟着变；**植物当场变化**（外观换图 / 成熟度状态项变化），**无需解暂停**。
+7. 滑条**能拖、能点**（点滑条空白处是否直接跳值）；**面板外的点击仍被拦住**；关掉面板后植物状态保持你拖到的值。
+8. **尺寸**：滑条高 44 / 滑块 28×28（用户 2026-09-13 反馈原 22 太小 ⇒ 已 ×2）；
+   看滑块在**两端**是否越出滑条、右侧 `%` 读数在**满格**时会不会被滑块压住（读数宽 64、右端留 2px 间隙）。
 
 plan.md §七 原有 4 条（留待后续批次）：
 
-8. 暂停下 `Growing.OverrideMaturityLevel` 后，植物外观/状态项是否**立即**刷新（还是需一次解暂停才换图）—— 与第 6 条重叠，一并看。
-9. 暂停下 `Geyser.AddModification` 后，间歇泉描述/喷发参数是否立即刷新。
-10. `BabyMonitor.Instance.SpawnAdult()` 在沙盒/本 Mod 生成出的实体上调用是否安全。
-11. 用户菜单按钮在**非建筑实体**（植物/动物/间歇泉）上是否正常显示。
+9. 暂停下 `Growing.OverrideMaturityLevel` 后，植物外观/状态项是否**立即**刷新（还是需一次解暂停才换图）—— 与第 6 条重叠，一并看。
+10. 暂停下 `Geyser.AddModification` 后，间歇泉描述/喷发参数是否立即刷新。
+11. `BabyMonitor.Instance.SpawnAdult()` 在沙盒/本 Mod 生成出的实体上调用是否安全。
+12. 用户菜单按钮在**非建筑实体**（植物/动物/间歇泉）上是否正常显示。
 
 ## 5. 待拍板 / 未决
 
 - **是否推送仍未定**：本地 `main` 领先 `origin/main` **4 个提交**（`2a29d44` 批 2a、`cd09869` 批 2b + 改名、`8fcfced` 文档同步、`bdfce31` 2b 崩溃修复），
   等用户说推再推（仓库纪律：不擅自 push）。
-- **滑杆来源已定案**（批 2b 执行中拍板，已写进 plan.md §3.1）：**纯代码自建 `KSlider`**，不用 `KNumberInputField`；
-  若实机上滑杆手感/外观不满意，可换的余地是"克隆场景里现存的原版滑杆实例"（需要先有带滑杆界面的建筑被选中）。
+- **滑条来源已定案**（批 2b 执行中拍板，已写进 plan.md §3.1）：**纯代码自建 `KSlider`**，不用 `KNumberInputField`；
+  若实机上滑条手感/外观不满意，可换的余地是"克隆场景里现存的原版滑条实例"（需要先有带滑条界面的建筑被选中）。
 - 按钮图标现取原版现存 sprite **`action_switch_toggle`**（`ComplexFabricator.cs:243` 在用）；实机看效果后若要换，改一处字符串，并落进 `Assets/README.md`。
 - `Patches/.gitkeep`、`UI/.gitkeep` 已被真实文件取代，是否删除待定（无害）。
 - `CHANGELOG.md` 是否随工程建立：**仍未决**（未获批准，勿擅建）。

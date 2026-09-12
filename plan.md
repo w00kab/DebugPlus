@@ -70,11 +70,14 @@
 > - ⚠️ **`Action` 名称冲突**：缺氧自带全局枚举 `Action`（`Action.Escape` / `Action.NumActions`），**命名空间成员优先于 `using System;` 导入**，故本 Mod 必须写 `System.Action`（原版源码通篇写 `System.Action(...)` 即此原因）。
 
 > **参数行素材来源的框架依据（2026 反编译 `Assembly-CSharp` + `Assembly-CSharp-firstpass`，并按"原版怎么用"核对）**——M1 参数行为什么**纯代码搭、不克隆**：
-> - **原版所有滑杆行都来自预制体**：`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`、`:37` `component.GetReference<KSlider>("Slider")`，而 `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用 ⇒ **mod 拿不到**；原版源码里**没有任何"代码自建滑杆"的先例**可照抄，所以这条只能自己按框架公开属性搭。
+> 术语（本项目统一）：**滑条** = 整条可拖的控件（`KSlider`）；**滑块** = 滑条上被拖动的小方块（`Slider.handleRect`）。
+> - **原版所有滑条行都来自预制体**：`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`、`:37` `component.GetReference<KSlider>("Slider")`，而 `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用 ⇒ **mod 拿不到**；原版源码里**没有任何"代码自建滑条"的先例**可照抄，所以这条只能自己按框架公开属性搭。
 > - **`KSlider` 可以纯代码构造**：`KSlider : Slider`（`KSlider.cs:8`），其所需的 `handleRect` / `fillRect` 都是 `Slider` 的**可写公开属性** ⇒ 代码建好 `RectTransform` 层级后直接赋值即可。
->   ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句就是 `base.handleRect.gameObject.GetComponent<ToolTip>()` ⇒ **handleRect 为空会 NRE**，故必须先让滑杆 GameObject **不激活**、挂完 `handleRect` / `fillRect` 再激活（Awake 在激活时才跑）。
+>   ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句就是 `base.handleRect.gameObject.GetComponent<ToolTip>()` ⇒ **handleRect 为空会 NRE**，故必须先让滑条 GameObject **不激活**、挂完 `handleRect` / `fillRect` 再激活（Awake 在激活时才跑）。
+>   ⚠️ **`Slider.Set(float, bool)` 是 protected（IL `family`）**：mod 调不到（CS0122）⇒ 程序化设值只能用公开 `value` 属性，
+>   并把 `onValueChanged` 的挂载**推迟到设完初值之后**（`SliderField.AttachListener()`），否则初值会外泄成一次"用户操作"。
 > - **`KNumberInputField` 不能纯代码构造**：`KInputField.inputField` 是 `[SerializeField] private KInputTextField`，`field` 属性**只读**（`KInputField.cs:10-16 / 105-106`）⇒ 数值不使用数字输入框，改自建 TMP 读数标签。
-> - **原版"滑杆 + 数值 + 标签"的组装样板**：`SliderSet`（`SliderSet.cs:9-33` `SetupSlider`：滑杆侧挂 `onReleaseHandle` / `onDrag` / `onMove` / `onPointerDown`，输入侧挂 `onEndEdit`；`:96-121` 统一 `SetValue` → `target.SetSliderValue`）。本 Mod 简化为"滑杆 + 读数"，写值通道用 `Slider.onValueChanged`。
+> - **原版"滑条 + 数值 + 标签"的组装样板**：`SliderSet`（`SliderSet.cs:9-33` `SetupSlider`：滑条侧挂 `onReleaseHandle` / `onDrag` / `onMove` / `onPointerDown`，输入侧挂 `onEndEdit`；`:96-121` 统一 `SetValue` → `target.SetSliderValue`）。本 Mod 简化为"滑条 + 读数"，写值通道用 `Slider.onValueChanged`。
 > - **生长状态的原版取法**：`PlantBranchGrower.cs:402-403` = `GetComponent<IManageGrowingStates>()` 优先、`gameObject.GetSMI<IManageGrowingStates>()` 兜底；读 `PercentGrown()`（`Growing.cs:121-124` = `maturity.value / GetMax()`）、写 `OverrideMaturityLevel(percent)`（`Growing.cs:54-58` = `maturity.SetValue(GetMax() * percent)`）⇒ **写入口收的是 0–1 比例，不是 0–100**。
 
 ### 3.2 关键事件/句柄速查
@@ -137,9 +140,15 @@
   - 内容区自建：标题 / 目标名 / 参数行位 / 关闭按钮；布局遵守 oni-ui 规则（根 VLG → 行 HLG 一层嵌套、`childForceExpandHeight = false`、TMP 显式赋 `Localization.FontAsset`、纯代码用 `Button` 且 `transition = None`、装饰层 `raycastTarget = false`）
   - **时间中立**：`pause = false`（原版默认 `true` 会改掉玩家自己按下的暂停）；关闭走 `Deactivate()`（原版会销毁实例，故"全局仅一个"实现为"已有实例就不再叠第二个"）
 - **参数行工厂（纯代码自建，不克隆任何预制体**——素材来源依据见 §3.1 框架事实块）
-  - **落地（批 2b 已实现）**：`UI/Component/ParameterRowFactory.cs`（构建）+ `UI/Component/ParameterRow.cs`（绑定）；行结构 = 标签 TMP + `KSlider` + 读数 TMP，行高 40、插在按钮行之前
-  - `ParameterRow.Bind` 的**顺序要求**：先设 `minValue` / `maxValue` / `wholeNumbers` / `value`，**最后**才订阅 `onValueChanged` —— 否则设初值本身就会把值写回游戏一次
-  - **滑杆 = 纯代码 `KSlider`**：内部层级照 Unity 原版滑杆（`background` / `fillArea`→`fill` / `handleArea`→`handle`），`Slider` 运行时自己驱动 `fill` 与 `handle` 的锚点，容器只提供矩形；可交互层用不透明 `background` 撑住命中（点它之后事件冒泡到 `Slider`）
+  - **落地（批 2b 已实现；2026-09-13 按用户拍板重构）**：`UI/Component/SliderField.cs`（**滑条 + 读数**组件，只管 UI）、
+    `UI/Component/ParameterRowFactory.cs`（行布局：标签 TMP + `SliderField`）、`UI/Component/ParameterRow.cs`（语义绑定）；
+    行高 **56**、插在按钮行之前
+  - **职责边界**：`SliderField` = 滑条怎么搭、怎么拖、读数怎么画（不认识任何游戏类型）；
+    `ParameterRow` = 读哪个值、写回哪里（`Parameter` 决定单位与显示规则）；工厂只管"一行怎么排"
+  - `ParameterRow.Bind` 的**顺序要求**：`SetRange`（范围 + 初值）→ `SetFormatter` → **最后** `AttachListener()` ——
+    否则设初值本身就会被当成一次用户操作写回游戏
+  - **滑条 = 纯代码 `KSlider`**：内部层级照 Unity 原版滑条（`background` / `fillArea`→`fill` / `handleArea`→`handle`），`Slider` 运行时自己驱动 `fill` 与 `handle` 的锚点，容器只提供矩形；可交互层用不透明 `background` 撑住命中（点它之后事件冒泡到 `Slider`）
+  - **尺寸基准（2026-09-13 实机反馈后 ×2）**：滑条高 44、滑块 28×28、行高 56、读数宽 64、填充内缩 6 —— 都在 `SliderField` 里以常量集中定义，改尺寸只动这一处
   - ⚠️ **纯代码建 UI 的一条硬性框架约束（批 2b 实机 NRE 定位所得，2026-09-13）**：新建的 UI GameObject **只能有一个 `RectTransform`**，
     对已有 RectTransform 的 GO 再 `AddComponent<RectTransform>()` 时 **Unity 返回 `null`（不抛异常）**，随后对 null 设锚点才 NRE。
     ⇒ 约定：本 Mod 所有 UI GameObject 一律由统一的 `NewUIObject()` 创建（内部挂 RectTransform），
@@ -155,7 +164,7 @@
 - 操作基座：`实体特征 → 操作集合`，与 M1 的模板注册表同源
 - 首批操作（按 §3.3 已验证的公开入口实现）：
   1. **植物生长进度**（`Growing`）——首个落地项，作为"暂停态操作"命题的最小验证
-     - **落地（批 2b 已实现）**：`Operations/GrowthOperation.cs`；取组件照原版 `PlantBranchGrower.cs:402-403`（`GetComponent<IManageGrowingStates>()` 优先、`GetSMI<IManageGrowingStates>()` 兜底）⇒ 凡有生长状态的实体（植物、树枝类）都可调，不硬编码 `Growing`；滑杆单位 **0–100 %**（整数刻度），读 `PercentGrown()×100`、写 `OverrideMaturityLevel(v/100)`
+     - **落地（批 2b 已实现）**：`Operations/GrowthOperation.cs`；取组件照原版 `PlantBranchGrower.cs:402-403`（`GetComponent<IManageGrowingStates>()` 优先、`GetSMI<IManageGrowingStates>()` 兜底）⇒ 凡有生长状态的实体（植物、树枝类）都可调，不硬编码 `Growing`；滑条单位 **0–100 %**（整数刻度），读 `PercentGrown()×100`、写 `OverrideMaturityLevel(v/100)`
   2. 植物变异（`MutantPlant`，DLC 门控）
   3. 动物年龄（`AgeMonitor`）+ 立即成体（`BabyMonitor.Instance.SpawnAdult()`）
   4. 动物野性/驯服（`WildnessMonitor`）+ 血量（`Health`）
@@ -199,7 +208,7 @@
 | 阶段 | 内容 | 出口条件 |
 |---|---|---|
 | P0 | M0 工程骨架 + 许可文件 + 环境校验 | 编译→部署→游戏内可加载（空 Mod）——**已完成** |
-| P1（重定稿） | **工程清理（去上游化）+ 首个暂停态操作**：把 SandboxTools 衍生文件**整体删除、不重写**（分类清除工具、生成器额外分类、AETN 即时建造补铁——逐块比对确认全部对应上游原文）；打通 M1 最小链（用户菜单按钮 + 模态弹窗 + 一个滑杆行）并落地"植物生长进度" | 暂停状态下点植物 → 改配置 → 弹窗 → 拉动生长进度 → **当场**变化（无需解暂停） |
+| P1（重定稿） | **工程清理（去上游化）+ 首个暂停态操作**：把 SandboxTools 衍生文件**整体删除、不重写**（分类清除工具、生成器额外分类、AETN 即时建造补铁——逐块比对确认全部对应上游原文）；打通 M1 最小链（用户菜单按钮 + 模态弹窗 + 一个滑条行）并落地"植物生长进度" | 暂停状态下点植物 → 改配置 → 弹窗 → 拉动生长进度 → **当场**变化（无需解暂停） |
 | P2 | M2 其余操作（动物年龄/成体/野性/血量、植物变异）+ M1 行工厂扩充（下拉/勾选/复合行） | 逐项在暂停下生效 |
 | P3 | 间歇泉/火山参数（M2 第 5 项）+ M3 生成物初始化补全 | 参数当场生效；沙盒生成出来的间歇泉/植物点开即为"已按配置成型" |
 | P4+ | M4 创造建筑套件（含屏蔽清单盘点与用户勾选） | 逐项验收 |

@@ -43,7 +43,7 @@ namespace DebugPlus.Operations
     }
 
     /// <summary>
-    /// 生长进度参数。滑杆单位是**百分比 0–100**（整数刻度），写回时换算成原版要的 0–1 比例。
+    /// 生长进度参数。滑条单位是**百分比 0–100**（整数刻度），写回时换算成原版要的 0–1 比例。
     /// </summary>
     public sealed class GrowthParameter : Parameter
     {

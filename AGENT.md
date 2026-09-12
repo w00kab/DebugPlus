@@ -12,6 +12,11 @@
    不合并、不"顺手"、不捎带。
 3. 方案先行（既有铁律）：plan.md 是唯一事实来源（单一定稿文档）；plan.md 之外的设计变更
    先提案、经用户拍板后同步修订 plan.md 与相关文档（LICENSE/NOTICE/agent.md 等）。
+4. 🔴 **每次修改完毕一律立刻提交 git**（用户 2026-09-13 明令："每次修改完毕都要提交 git"）：
+   一批改动做完（编译通过 + 自验过）就**立即** `git commit`，**不要问"要不要提交"**、不要攒着等下一批；
+   提交信息用 `feat/fix/docs(模块): 中文说明`，正文写清"做了什么 / 为何这么做 / 怎么验证的"。
+   只**推送**才需要用户发话（`git push` 仍不擅自执行）。
+   提交用**显式路径** `git add -- <文件…>`，不用 `git add -A`（防把并发写入/无关文件捎带进去）。
 
 ## 1. 项目一句话
 
@@ -50,9 +55,16 @@
 ## 3. 构建与部署
 
 - 环境检查：`C:\Users\魏锴\.agents\skills\oni-mod-dev\scripts\check-env.ps1`
-- 编译+部署：`build.ps1 -ProjectRoot "F:\ONI_ModDev\ONI_ModCode\Debug Plus"`（Release 默认）
+- 🔴 **编译与部署只能走 `build.ps1`，一次也不许例外**（用户 2026-09-13 明令："只能使用 build！"）：
+  ```powershell
+  & "C:\Users\魏锴\.agents\skills\oni-mod-dev\scripts\build.ps1" -ProjectRoot "F:\ONI_ModDev\ONI_ModCode\Debug Plus"
+  ```
+  **禁止**：手写 `Copy-Item` / `robocopy` 拷贝 DLL、手动拼 `dotnet build` / `msbuild`、用任何"临时脚本"替代它。
+  这条命令**必须单独执行**：不要把 `build.ps1` 和别的命令（检查、grep、git）拼在同一次 pwsh 调用里 ——
+  那会让提权请求里混进无关操作，用户无法判断该批什么（2026-09-13 已被用户拒过一次）。
+  需要自验就**分开发起**独立的只读命令（`grep` / `Get-FileHash` / `git status`）。
 - 部署目标：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
-  （workspace 外 → 大概率触发沙箱拒绝 → 对同一条命令申请一次提权重试）
+  （workspace 外 → 大概率触发沙箱拒绝 → 对**同一条 build.ps1 命令**申请一次提权重试；拒绝后不得改用拷贝绕过）
 - 日志：`%USERPROFILE%\AppData\LocalLow\Klei\Oxygen Not Included\player.log`（前缀 `[DebugPlus]`）
 - 远程仓库：`https://github.com/w00kab/DebugPlus`（`origin`，分支 `main`）。仓库根 = 工程根。
   ⚠️ 推送需认证 → 受限沙箱下 git 凭证管理器会失败（`sh.exe: couldn't create signal pipe`），
@@ -120,14 +132,14 @@
 - ✅ **批 2b（参数行 + 植物生长进度）已实现并编译部署**（2026-09-13，待用户实机验证）：
   `Operations/OperationRegistry.cs`（`IOperation` 登记表，判定与能力同源）、`Operations/GrowthOperation.cs`（`IManageGrowingStates`
   读/写，**写入口收 0–1 比例**）、`Operations/Parameter.cs`（参数抽象）、`UI/Component/ParameterRowFactory.cs` + `UI/Component/ParameterRow.cs`
-  （**纯代码自建 `KSlider`**：原版滑杆全来自拿不到的预制体引用；`KNumberInputField` 因
+  （**纯代码自建 `KSlider`**：原版滑条全来自拿不到的预制体引用；`KNumberInputField` 因
   `inputField` 是 `[SerializeField] private` 而**不可**纯代码构造）、`UI/View/ConfigPanel.cs`（接参数行 + 动态高度）。
   **关键结论已沉淀进 plan.md §3.1 的"参数行素材来源的框架依据"块**。
 - 本地 git 仓库：批 1 基线 `4aaf9e4` → README `ee138c3` → 文档同步 `9bf8108` → **批 2a `2a29d44`**（已提交）；
   批 2b 的改动**已提交**（`cd09869`，含目录与命名整理），其崩溃修复为 `bdfce31`。
   分支 `main`，**远程未推送**（本地领先 `origin/main` 4 个提交）。
 - 🔧 **批 2b 实机首跑即崩 → 已定位修复、02:44 重新部署（待复验）**：`ParameterRowFactory.CreateSlider` 里
-  手柄的 `RectTransform` 是 `null` ⇒ NRE。**根因**：`NewUIObject` 已挂过 `RectTransform`，再
+  滑块的 `RectTransform` 是 `null` ⇒ NRE。**根因**：`NewUIObject` 已挂过 `RectTransform`，再
   `AddComponent<RectTransform>()` 时 **Unity 返回 `null` 而不抛异常**，下一句设锚点才崩。
   修复：`handle.GetComponent<RectTransform>()`。**定位法（以后照做）**：`player.log` 的栈带 **IL 偏移**
   （`[0x0010a]`）→ `ildasm` 反汇编**本 Mod 自己的** DLL（无需第三方反编译器，更不需反编译本体）→
