@@ -1,4 +1,5 @@
-using DebugPlus.UI;
+using DebugPlus.Operations;
+using DebugPlus.UI.Component;
 using HarmonyLib;
 using UnityEngine;
 
@@ -27,21 +28,11 @@ namespace DebugPlus.Patches
             {
                 return;
             }
-            if (!IsConfigurable(go))
+            if (!OperationRegistry.IsConfigurable(go))
             {
                 return;
             }
-            DpConfigButton.EnsureOn(go);
-        }
-
-        /// <summary>
-        /// 批 2a 的临时命中判定：当前只有「植物生长进度」一项能力，因此直接认 Growing。
-        /// 批 2b 的 A5（Ops/DpOpRegistry）会把它换成注册表查询 —— 判定与能力同源，
-        /// 不在注册表里的实体连按钮都不会出现。
-        /// </summary>
-        private static bool IsConfigurable(GameObject go)
-        {
-            return go.GetComponent<Growing>() != null;
+            ConfigButton.EnsureOn(go);
         }
     }
 }

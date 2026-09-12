@@ -21,9 +21,13 @@ namespace DebugPlus
                 public static LocString CONFIG_BUTTON_TOOLTIP = "打开 DebugPlus 配置面板";
 
                 public static LocString PANEL_TITLE = "修改配置";
-                public static LocString PANEL_PENDING = "（批 2a 仅外壳：参数行将在批 2b 接入）";
+                public static LocString PANEL_NO_PARAMS = "（该实体暂无可调参数）";
                 public static LocString PANEL_CLOSE = "关闭";
                 public static LocString PANEL_NO_TARGET = "（未取得目标名称）";
+
+                // 参数行文案（批 2b · A7b）
+                public static LocString PARAM_GROWTH = "生长进度";
+                public static LocString UNIT_PERCENT = "%";
             }
         }
     }

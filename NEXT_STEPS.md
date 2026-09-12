@@ -25,11 +25,12 @@
   - 基线提交：`4aaf9e4`（去上游化后的干净基线）→ `ee138c3`（新增 `README.md`）→ `9bf8108`（git 状态文档同步）。
   - 自验：远程 `refs/heads/main` 提交号与本地一致；`raw.githubusercontent.com` 可取回 `README.md`/`.gitignore`；
     `bin/` 与 `*.dll` 经 `git check-ignore` 确认被忽略。
-  - ⚠️ **批 2a 的代码尚未提交**（工作区有 4 个改动文件 + 3 个新增文件，等用户指示）。
+  - ⚠️ **批 2a 的代码已提交**：`2a29d44`（`feat(M1): 批 2a 实体配置弹窗外壳`，8 文件 / +534 −46）。
 - 已部署：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
-  （批 2a 产物 `DebugPlus.dll` **11776 B**，2026-09-13 02:04；批 1 时为 4608 B）。
+  （批 1 = 4608 B → 批 2a = 11776 B → **批 2b = 16896 B**，2026-09-13 02:20；本地与部署目录 SHA256 一致）。
 - ✅ **批 2a · M1 最小链外壳：已实现、编译、部署完成** → **⏸ 待用户实机验证**（见 §4 第 1–4 条）。
-- ⏳ **批 2b（A4–A6 + A7b）尚未获批准**：仍是"已出方案、等点头"，**一行代码都还没写**。
+- ✅ **批 2b（A4–A6 + A7b）：已实现、编译、部署完成** → **⏸ 待用户实机验证**（见 §4 第 5–7 条）。
+  **2b 的代码尚未提交**（git 纪律：等用户说"阶段完成"再提交）。
 
 ## 1. 批 2 施工单：M1 最小链 + 植物生长进度
 
@@ -39,22 +40,29 @@
 
 | # | 文件（新建） | 内容 | 状态 |
 |---|---|---|---|
-| A1 | `Patches/UserMenu_AppendToScreen_Patch.cs` | `[HarmonyPatch(typeof(UserMenu), nameof(UserMenu.AppendToScreen), typeof(GameObject), typeof(UserMenuScreen))]` 的 **Prefix**：命中判定 → `DpConfigButton.EnsureOn(go)`。**必须是 Prefix**：事件在方法体内触发，Postfix 时本次按钮已交给屏幕 | ✅ |
-| A2 | `UI/DpConfigButton.cs` | 实体身上的 `KMonoBehaviour`：`Subscribe<DpConfigButton>(493375141, 静态 IntraObjectHandler)` → `Game.Instance.userMenu.AddButton(gameObject, new ButtonInfo(图标, "修改配置", 点击, Action.NumActions, null, null, null, tooltip, true), 20f)`；`EnsureOn` = `GetComponent ?? AddComponent` + `InitializeComponent()`（幂等兜底，保证框架 `obj` 已赋值）+ `SubscribeOnce()`（`subscribed` 标志防重复订阅）；点击 → `DpConfigPanel.OpenFor(gameObject)`；**不做任何序列化**（读档后由 A1 重新挂上，**不影响存档**） | ✅ |
-| A3 | `UI/DpConfigPanel.cs` | **自建**（不克隆预制体）`KModalScreen`：`new GameObject` + `AddComponent`（Awake → `OnPrefabInit` 建遮罩与内容区）→ `KScreenManager.AddExistingChild(ssOverlayCanvas, go)` → `Activate()`；内容区 = 标题 / 目标名 / 参数行位 / 关闭按钮；`pause = false`（时间中立）；已有实例只抬到最上层（不叠加） | ✅ |
+| A1 | `Patches/UserMenu_AppendToScreen_Patch.cs` | `[HarmonyPatch(typeof(UserMenu), nameof(UserMenu.AppendToScreen), typeof(GameObject), typeof(UserMenuScreen))]` 的 **Prefix**：命中判定 → `ConfigButton.EnsureOn(go)`。**必须是 Prefix**：事件在方法体内触发，Postfix 时本次按钮已交给屏幕 | ✅ |
+| A2 | `UI/Component/ConfigButton.cs` | 实体身上的 `KMonoBehaviour`：`Subscribe<ConfigButton>(493375141, 静态 IntraObjectHandler)` → `Game.Instance.userMenu.AddButton(gameObject, new ButtonInfo(图标, "修改配置", 点击, Action.NumActions, null, null, null, tooltip, true), 20f)`；`EnsureOn` = `GetComponent ?? AddComponent` + `InitializeComponent()`（幂等兜底，保证框架 `obj` 已赋值）+ `SubscribeOnce()`（`subscribed` 标志防重复订阅）；点击 → `ConfigPanel.OpenFor(gameObject)`；**不做任何序列化**（读档后由 A1 重新挂上，**不影响存档**） | ✅ |
+| A3 | `UI/View/ConfigPanel.cs` | **自建**（不克隆预制体）`KModalScreen`：`new GameObject` + `AddComponent`（Awake → `OnPrefabInit` 建遮罩与内容区）→ `KScreenManager.AddExistingChild(ssOverlayCanvas, go)` → `Activate()`；内容区 = 标题 / 目标名 / 参数行位 / 关闭按钮；`pause = false`（时间中立）；已有实例只抬到最上层（不叠加） | ✅ |
 | A7 | `STRINGS.cs` + `DebugPlusMod.cs` | 4 条独立中文 LocString（按钮 / tooltip / 面板标题 / 关闭 + 占位说明 + 无名兜底）；入口补 `Localization.RegisterForTranslation(typeof(STRINGS))`（本 Mod 自己的文本，与已删的上游那份无关） | ✅ |
 | A8 | `plan.md` / `AGENT.md` / 本文件 | plan.md §3.1 新增**自建模态屏的框架依据**块 + 模态弹窗行改写 + §四 M1 落地细节；AGENT.md §5 增"框架程序集源码"行 + §8 进度；本文件重写 | ✅ |
 
-**当前判定方式**：批 2a 暂时直接在 `UserMenu_AppendToScreen_Patch.IsConfigurable` 里认 `Growing`；批 2b 的 A5 会把它换成注册表查询（判定与能力同源）。
+**命中判定（批 2b 起）**：不再有任何临时判定，A1 的 Prefix 直接查 `Operations/OperationRegistry.IsConfigurable(go)`，
+与面板的 `BuildParameters` 同源 —— **不在注册表里的实体连按钮都不出现**。批 2a 那句 `go.GetComponent<Growing>() != null` 已删除。
 
-### 批 2b · 能力（出口：暂停下拖滑杆，植物当场变）—— ⏳ 待批准
+### 批 2b · 能力（出口：暂停下拖滑杆，植物当场变）—— ✅ 已完成（出口待实机）
 
-| # | 文件（新建） | 内容 |
-|---|---|---|
-| A4 | `UI/DpParamRow.cs`、`UI/DpRowFactory.cs` | 行基类（标签 / 取值 / 写值 / 范围 / 单位 / 格式化）+ 参数行构建。**开工前先定滑杆来源**：原版那些 `SliderValue` 预制体是 `[SerializeField]` 引用（mod 取不到），要么克隆场景里一个现存实例，要么纯代码自建 `KSlider` + `KNumberInputField`（须先读 `Assembly-CSharp-firstpass\KSlider.cs`） |
-| A5 | `Ops/DpOpRegistry.cs` | `实体特征 → 参数行定义列表` 注册表，初版只登记"植物生长进度"；A1 的命中判定改为查询它（不在注册表里的实体连按钮都不出现） |
-| A6 | `Ops/DpGrowthOp.cs` | 读 `Growing.PercentGrown()` / 写 `Growing.OverrideMaturityLevel(percent)`。⚠️ **参数是 0–1 的比例，不是 0–100**（`Growing.cs:54-57`：`SetValue(GetMax() * percent)`）；UI 显百分比时自行换算。**纯写值、零时间依赖**（plan.md §二.2） |
-| A7b | `STRINGS.cs` | 行标签与单位文案（"生长进度"、`%`） |
+| # | 文件 | 内容 | 状态 |
+|---|---|---|---|
+| A4 | `UI/Component/ParameterRow.cs`、`UI/Component/ParameterRowFactory.cs` | 行绑定 + 纯代码建行（标签 TMP + `KSlider` + 读数 TMP）。**滑杆来源定案：纯代码自建 `KSlider`**——原版所有滑杆都来自预制体（`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(sliderPrefab…)`，`sliderPrefab` 是 `[SerializeField]`，mod 拿不到），原版没有"代码自建滑杆"先例；而 `Slider.handleRect` / `fillRect` 是可写公开属性 ⇒ 可自建。⚠️ `KSlider.Awake()` 第一句取 `handleRect.gameObject`（`KSlider.cs:40`）⇒ **先不激活、挂完 handleRect 再激活**。**不用 `KNumberInputField`**：`KInputField.inputField` 是 `[SerializeField] private`、`field` 只读（`KInputField.cs:10-16/105-106`）⇒ 数值改用 TMP 读数。`Bind` 顺序：先设范围/初值、**最后**订阅 `onValueChanged` | ✅ |
+| A5 | `Operations/OperationRegistry.cs` | `IOperation` 接口 + 登记表（静态构造里登记 `GrowthOperation`）；`IsConfigurable` / `BuildParameters` **同源**；A1 的临时判定（`GetComponent<Growing>()`）已删除，改查注册表 | ✅ |
+| A6 | `Operations/GrowthOperation.cs` | 取组件照原版 `PlantBranchGrower.cs:402-403`：`GetComponent<IManageGrowingStates>()` 优先、`GetSMI<IManageGrowingStates>()` 兜底（⇒ 植物与树枝类都覆盖，不硬编码 `Growing`）；读 `PercentGrown()×100`、写 `OverrideMaturityLevel(v/100)` —— ⚠️ **写入口收 0–1 比例**（`Growing.cs:54-58`）。**纯写值、零时间依赖** | ✅ |
+| A7b | `STRINGS.cs` | 新增 `PARAM_GROWTH`「生长进度」、`UNIT_PERCENT`「%」；`PANEL_PENDING` 改为 `PANEL_NO_PARAMS`「（该实体暂无可调参数）」（无参数行时才显示） | ✅ |
+| A4b | `UI/View/ConfigPanel.cs` | 接参数行：`SetTarget` → `BuildParamRows`（逐行插在按钮行之前，都是根 VLG 直接子节点，不嵌套 VLG）→ 按行数**动态算窗口高度**；日志带行数 | ✅ |
+
+**命名（用户 2026-09-13 定）**：目录 `UI/View`（屏/面板）+ `UI/Component`（控件/工厂）+ `Operations/`（操作与参数）；
+类名**不加前缀**（靠命名空间 `DebugPlus.*` 区分）、**一律写全禁缩写**（`Operation` 不写 `Op`、`Parameter` 不写 `Param`）。
+→ 已按此把 `DpOpRegistry`/`DpGrowthOp`/`DpParamRow`/`DpRowFactory`/`DpConfigButton`/`DpConfigPanel`/`DpParam` 全部改名，
+并同步 plan.md §四 目录清单与命名规范表。
 
 ### 每步自验（agent 侧）
 
@@ -100,6 +108,26 @@
 - ⚠️ **`KModalScreen.pause` 默认 `true`**（`KModalScreen.cs:152`）：打开会 `SpeedControlScreen.Pause(false, false)`、关闭会 `Unpause(false)` → **会改掉玩家自己按下的暂停状态，与时间中立铁律冲突 ⇒ 本 Mod 显式设 `false`**。
 - ⚠️ **`Action` 名称冲突**：缺氧自带全局枚举 `Action`（`Action.Escape`/`Action.NumActions`），**命名空间成员优先于 `using System;` 导入** ⇒ 本 Mod 一律写 `System.Action`（原版源码通篇如此，即此原因）。
 
+### 2.3 滑杆素材与生长状态（`Assembly-CSharp` / `firstpass`，2026-09-13 批 2b 核对）
+
+- **原版所有滑杆行都来自预制体** ⇒ mod 只能自建：
+  `MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`、`:37` `component.GetReference<KSlider>("Slider")`；
+  `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用，**mod 拿不到**；原版源码里**没有**"代码自建滑杆"的先例。
+- **`KSlider` 可纯代码构造**：`KSlider : Slider`（`KSlider.cs:8`），需要的 `handleRect` / `fillRect` 是 `Slider` 的**可写公开属性**。
+  ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句 `base.handleRect.gameObject.GetComponent<ToolTip>()`
+  ⇒ **handleRect 为空必 NRE** ⇒ 先让滑杆 GameObject **不激活**、挂完 `handleRect`/`fillRect` 再激活。
+  另：`onDrag` / `onReleaseHandle` / `onPointerDown` / `onMove` 是 KSlider 自己的事件（`SliderSet.SetupSlider` 用的就是它们）；
+  本 Mod 只需连续写值，故用基类 `Slider.onValueChanged`。
+- **`KNumberInputField` 不可纯代码构造**：`KInputField.inputField` 为 `[SerializeField] private KInputTextField`，
+  `field` 属性只读（`KInputField.cs:10-16 / 105-106`）⇒ 数值改用自建 TMP 读数标签。
+- **原版"滑杆+数值+标签"样板**：`SliderSet.SetupSlider`（`SliderSet.cs:9-33`）、`SetTarget`（`:36-68`）、`SetValue`（`:96-121`）。
+- **生长状态的原版取法**（`PlantBranchGrower.cs:402-403`）：`GetComponent<IManageGrowingStates>()` 优先、
+  `gameObject.GetSMI<IManageGrowingStates>()` 兜底（树枝类是 SMI 实现）。
+  接口定义在 `IManageGrowingStates.cs:10/16`；`Growing` 实现它（`Growing.cs:9`）。
+  读 `PercentGrown()`（`Growing.cs:121-124` = `maturity.value / GetMax()`）；
+  写 `OverrideMaturityLevel(percent)`（`Growing.cs:54-58` = `maturity.SetValue(GetMax() * percent)`）⇒ **收 0–1 比例**。
+  原版自己也把 `PercentGrown()` 乘 100 显示（`CreatureStatusItems.cs:240/253`）。
+
 ## 3. 必须留存的教训
 
 1. **不可把游戏 `STRINGS` 的 LocString 字段直接赋给本 Mod 字段**：`LocString` 是引用类型（class），赋值后
@@ -109,6 +137,11 @@
 3. 反编译产物可能含迭代器状态机残留（无法编译），只能对照阅读、**绝不内嵌**。
 4. **命名冲突**：缺氧有全局枚举 `Action`（以及高频名 `Debug` 等），写库类型时优先全限定（`System.Action`），别只靠 `using`。
 5. **反编译产物已扩到框架程序集**（`缺氧本体代码\Assembly-CSharp-firstpass`）：凡涉及 UI / 屏幕 / 组件生命周期的施工，**先读它再写**，不要再凭记忆判断（它直接决定"能不能自建"这类问题）。
+6. **"能不能纯代码构造"必须逐个查字段所有权**：`Button` 能用而 `KButton` 不能（`soundPlayer` 是 `[SerializeField]`）、
+   `KSlider` 能用而 `KNumberInputField` 不能（`inputField` 是 `[SerializeField] private` 且只读）——
+   判据是**它依赖的引用是不是可以运行时赋值的公开成员**，不是类名像不像 UI 组件。
+7. **Unity 组件的 Awake 陷阱**：往**已激活**的 GameObject 上 `AddComponent` 会立刻跑 Awake，
+   若该 Awake 要读尚未赋值的 `[SerializeField]` 式引用就会 NRE ⇒ 需要时"**先 SetActive(false) → 挂好引用 → 再激活**"（本 Mod 建 `KSlider` 用的就是这招）。
 
 ## 4. ⏸ 待用户实机验证（未验证前不得当成事实）
 
@@ -119,17 +152,24 @@
 3. `Esc` 与面板「关闭」按钮是否都能关闭；**重复点按钮是否不会叠出第二个面板**。
 4. 打开 / 关闭面板前后，**游戏速度与暂停状态是否原样不变**（`pause = false` 的验证点）。
 
-plan.md §七 原有 4 条（留待 2b 及之后）：
+批 2b 专项（本轮新增，接在 2a 之后一起看）：
 
-5. 暂停下 `Growing.OverrideMaturityLevel` 后，植物外观/状态项是否**立即**刷新（还是需一次解暂停才换图）。
-6. 暂停下 `Geyser.AddModification` 后，间歇泉描述/喷发参数是否立即刷新。
-7. `BabyMonitor.Instance.SpawnAdult()` 在沙盒/本 Mod 生成出的实体上调用是否安全。
-8. 用户菜单按钮在**非建筑实体**（植物/动物/间歇泉）上是否正常显示。
+5. 面板里是否出现**「生长进度」一行**（标签 + 滑杆 + 右侧百分比读数），读数与植物当前进度是否对得上（可先看原版植物状态项里的成熟度百分比）。
+6. **拖动滑杆**：读数是否跟着变；**植物当场变化**（外观换图 / 成熟度状态项变化），**无需解暂停**。
+7. 滑杆**能拖、能点**（点滑杆空白处是否直接跳值）；**面板外的点击仍被拦住**；关掉面板后植物状态保持你拖到的值。
+
+plan.md §七 原有 4 条（留待后续批次）：
+
+8. 暂停下 `Growing.OverrideMaturityLevel` 后，植物外观/状态项是否**立即**刷新（还是需一次解暂停才换图）—— 与第 6 条重叠，一并看。
+9. 暂停下 `Geyser.AddModification` 后，间歇泉描述/喷发参数是否立即刷新。
+10. `BabyMonitor.Instance.SpawnAdult()` 在沙盒/本 Mod 生成出的实体上调用是否安全。
+11. 用户菜单按钮在**非建筑实体**（植物/动物/间歇泉）上是否正常显示。
 
 ## 5. 待拍板 / 未决
 
-- **批 2a 的代码是否提交（并推送）**：当前 4 改 3 增未入库，等用户指示（仓库纪律：等用户说"阶段完成"再提交）。
-- **批 2b（A4–A6 + A7b）等用户批准**；其中 **A4 的滑杆来源**（克隆场景现存 `SliderValue` 实例 vs 纯代码自建 `KSlider`）开工前先定。
+- **批 2b 的代码是否提交**：6 个文件新增/改动未入库（仓库纪律：等用户说"阶段完成"再提交）；**是否推送**同样等指示（批 2a 的 `2a29d44` 也还没推）。
+- **滑杆来源已定案**（批 2b 执行中拍板，已写进 plan.md §3.1）：**纯代码自建 `KSlider`**，不用 `KNumberInputField`；
+  若实机上滑杆手感/外观不满意，可换的余地是"克隆场景里现存的原版滑杆实例"（需要先有带滑杆界面的建筑被选中）。
 - 按钮图标现取原版现存 sprite **`action_switch_toggle`**（`ComplexFabricator.cs:243` 在用）；实机看效果后若要换，改一处字符串，并落进 `Assets/README.md`。
 - `Patches/.gitkeep`、`UI/.gitkeep` 已被真实文件取代，是否删除待定（无害）。
 - `CHANGELOG.md` 是否随工程建立：**仍未决**（未获批准，勿擅建）。

@@ -109,8 +109,10 @@ dotnet build DebugPlus.sln -c Release
 DebugPlus/
 ├── DebugPlus/
 │   ├── Patches/          # Harmony 补丁类（Xxx_目标_Patch）
-│   ├── UI/               # 用户菜单按钮、模态弹窗、参数行工厂
-│   ├── Ops/              # 暂停态操作定义与动作集
+│   ├── UI/
+│   │   ├── View/         # 屏 / 面板（模态弹窗等）
+│   │   └── Component/    # 控件与构建工厂（菜单按钮、参数行等）
+│   ├── Operations/       # 暂停态操作定义与动作集
 │   ├── Spawner/          # 生成增强
 │   ├── Assets/           # 图标资源说明
 │   ├── STRINGS.cs        # 本地化字符串（类名必须叫 STRINGS）

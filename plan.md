@@ -69,6 +69,14 @@
 > - ⚠️ **`KModalScreen.pause` 默认 `true`**（`KModalScreen.cs:152`）：打开会 `SpeedControlScreen.Pause(false, false)`、关闭会 `Unpause(false)`——**会改掉玩家自己按下的暂停状态，与 §二.2 时间中立铁律冲突 ⇒ 本 Mod 显式 `pause = false`**。
 > - ⚠️ **`Action` 名称冲突**：缺氧自带全局枚举 `Action`（`Action.Escape` / `Action.NumActions`），**命名空间成员优先于 `using System;` 导入**，故本 Mod 必须写 `System.Action`（原版源码通篇写 `System.Action(...)` 即此原因）。
 
+> **参数行素材来源的框架依据（2026 反编译 `Assembly-CSharp` + `Assembly-CSharp-firstpass`，并按"原版怎么用"核对）**——M1 参数行为什么**纯代码搭、不克隆**：
+> - **原版所有滑杆行都来自预制体**：`MultiSliderSideScreen.cs:34` `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`、`:37` `component.GetReference<KSlider>("Slider")`，而 `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用 ⇒ **mod 拿不到**；原版源码里**没有任何"代码自建滑杆"的先例**可照抄，所以这条只能自己按框架公开属性搭。
+> - **`KSlider` 可以纯代码构造**：`KSlider : Slider`（`KSlider.cs:8`），其所需的 `handleRect` / `fillRect` 都是 `Slider` 的**可写公开属性** ⇒ 代码建好 `RectTransform` 层级后直接赋值即可。
+>   ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句就是 `base.handleRect.gameObject.GetComponent<ToolTip>()` ⇒ **handleRect 为空会 NRE**，故必须先让滑杆 GameObject **不激活**、挂完 `handleRect` / `fillRect` 再激活（Awake 在激活时才跑）。
+> - **`KNumberInputField` 不能纯代码构造**：`KInputField.inputField` 是 `[SerializeField] private KInputTextField`，`field` 属性**只读**（`KInputField.cs:10-16 / 105-106`）⇒ 数值不使用数字输入框，改自建 TMP 读数标签。
+> - **原版"滑杆 + 数值 + 标签"的组装样板**：`SliderSet`（`SliderSet.cs:9-33` `SetupSlider`：滑杆侧挂 `onReleaseHandle` / `onDrag` / `onMove` / `onPointerDown`，输入侧挂 `onEndEdit`；`:96-121` 统一 `SetValue` → `target.SetSliderValue`）。本 Mod 简化为"滑杆 + 读数"，写值通道用 `Slider.onValueChanged`。
+> - **生长状态的原版取法**：`PlantBranchGrower.cs:402-403` = `GetComponent<IManageGrowingStates>()` 优先、`gameObject.GetSMI<IManageGrowingStates>()` 兜底；读 `PercentGrown()`（`Growing.cs:121-124` = `maturity.value / GetMax()`）、写 `OverrideMaturityLevel(percent)`（`Growing.cs:54-58` = `maturity.SetValue(GetMax() * percent)`）⇒ **写入口收的是 0–1 比例，不是 0–100**。
+
 ### 3.2 关键事件/句柄速查
 
 | 事件 ID | 含义 |
@@ -118,25 +126,32 @@
 - `mod_info.yaml`：APIVersion 2、UTF-8 **无 BOM**、staticID `Weik.DP.DebugPlus`
 - `DebugPlusMod.cs`（`UserMod2`，每 DLL 唯一、非 abstract）、`Properties/AssemblyInfo.cs`
 - **`NOTICE` / `LICENSE`**：本工程自己的 MIT（无上游声明段）
-- 目录：`Patches/`、`UI/`（弹窗与行工厂）、`Ops/`（暂停态操作定义与动作集）、`Spawner/`（生成物初始化补全）、`Assets/`、`STRINGS.cs`
+- 目录：`Patches/`、`UI/View/`（屏与面板）、`UI/Component/`（控件与构建工厂）、`Operations/`（暂停态操作定义与动作集）、`Spawner/`（生成物初始化补全）、`Assets/`、`STRINGS.cs`
 
 ### M1 · 实体配置弹窗框架层（UI）★ 本 Mod 门面
 职责：把"点中实体 → 一个按钮 → 弹窗改配置"这条链搭起来，供所有操作模块复用。
 - **用户菜单按钮注入**：对选中实体在 `RefreshUserMenu` 时机加"修改配置"按钮；不改任何预制体、不改选择流程
-  - **落地（批 2a 已实现）**：`Patches/UserMenu_AppendToScreen_Patch.cs` 在 `UserMenu.AppendToScreen` 的 **Prefix** 里判定目标并调 `DpConfigButton.EnsureOn(go)`；`UI/DpConfigButton.cs` 是**挂在实体身上的 `KMonoBehaviour`**，用 `Subscribe<DpConfigButton>(493375141, 静态 IntraObjectHandler)`（照 `Clearable.cs:17/222` 原版写法）→ `Game.Instance.userMenu.AddButton(gameObject, new ButtonInfo(...), 20f)`。组件**不做任何序列化**，读档后由 A1 重新挂上，**不影响存档**；订阅由 `subscribed` 标志保证只做一次（防框架回调与直接调用重复）
+  - **落地（批 2a 已实现）**：`Patches/UserMenu_AppendToScreen_Patch.cs` 在 `UserMenu.AppendToScreen` 的 **Prefix** 里判定目标并调 `ConfigButton.EnsureOn(go)`；`UI/Component/ConfigButton.cs` 是**挂在实体身上的 `KMonoBehaviour`**，用 `Subscribe<ConfigButton>(493375141, 静态 IntraObjectHandler)`（照 `Clearable.cs:17/222` 原版写法）→ `Game.Instance.userMenu.AddButton(gameObject, new ButtonInfo(...), 20f)`。组件**不做任何序列化**，读档后由 A1 重新挂上，**不影响存档**；订阅由 `subscribed` 标志保证只做一次（防框架回调与直接调用重复）
 - **模态弹窗**（**自建，不克隆预制体**——依据见 §3.1 框架事实块）
-  - **落地（批 2a 已实现）**：`UI/DpConfigPanel.cs : KModalScreen`；`new GameObject` + `AddComponent`（Awake → `OnPrefabInit` 生成遮罩与内容区）→ `KScreenManager.AddExistingChild(GameScreenManager.Instance.ssOverlayCanvas, go)` → `Activate()`
+  - **落地（批 2a 已实现）**：`UI/View/ConfigPanel.cs : KModalScreen`；`new GameObject` + `AddComponent`（Awake → `OnPrefabInit` 生成遮罩与内容区）→ `KScreenManager.AddExistingChild(GameScreenManager.Instance.ssOverlayCanvas, go)` → `Activate()`
   - 内容区自建：标题 / 目标名 / 参数行位 / 关闭按钮；布局遵守 oni-ui 规则（根 VLG → 行 HLG 一层嵌套、`childForceExpandHeight = false`、TMP 显式赋 `Localization.FontAsset`、纯代码用 `Button` 且 `transition = None`、装饰层 `raycastTarget = false`）
   - **时间中立**：`pause = false`（原版默认 `true` 会改掉玩家自己按下的暂停）；关闭走 `Deactivate()`（原版会销毁实例，故"全局仅一个"实现为"已有实例就不再叠第二个"）
-- **参数行工厂**：克隆原版控件预制体——滑杆/数字输入（对应原版 `SliderValue` 的 `KSlider` + `KNumberInputField`）、勾选（`MultiToggle`）、下拉（原版选择器行）；每行声明"取值/写值/范围/单位"
+- **参数行工厂（纯代码自建，不克隆任何预制体**——素材来源依据见 §3.1 框架事实块）
+  - **落地（批 2b 已实现）**：`UI/Component/ParameterRowFactory.cs`（构建）+ `UI/Component/ParameterRow.cs`（绑定）；行结构 = 标签 TMP + `KSlider` + 读数 TMP，行高 40、插在按钮行之前
+  - `ParameterRow.Bind` 的**顺序要求**：先设 `minValue` / `maxValue` / `wholeNumbers` / `value`，**最后**才订阅 `onValueChanged` —— 否则设初值本身就会把值写回游戏一次
+  - **滑杆 = 纯代码 `KSlider`**：内部层级照 Unity 原版滑杆（`background` / `fillArea`→`fill` / `handleArea`→`handle`），`Slider` 运行时自己驱动 `fill` 与 `handle` 的锚点，容器只提供矩形；可交互层用不透明 `background` 撑住命中（点它之后事件冒泡到 `Slider`）
+  - **不用 `KNumberInputField`**（纯代码无法合法构造，见 §3.1）；后续行类型（勾选 `MultiToggle`、下拉选择器）待 P2，届时同样按"能不能纯代码构造"逐个核对框架源码
 - **实体能力模板注册表**：`实体特征 → 参数行定义列表`（选中实体后按特征匹配，生成对应行；无匹配则不显示按钮或提示"该实体无可调参数"）
+  - **落地（批 2b 已实现）**：`Operations/OperationRegistry.cs`（`IOperation` 接口 + 登记表）；**判定与能力同源**——A1 的 `OperationRegistry.IsConfigurable(go)` 与面板的 `OperationRegistry.BuildParameters(go)` 走同一批登记项，故不可能出现"按钮在但面板空白"；初版只登记 `Operations/GrowthOperation.cs`
+  - 面板按参数行数**动态算窗口高度**（无参数行时才显示"该实体暂无可调参数"提示）
 - 扩展槽：自研参数行类型（如"元素选择 + 温度 + 病菌"复合行）、二级面板（后续创造建筑套件用）
 
-### M2 · 暂停态操作层（Ops）★ 本 Mod 核心
+### M2 · 暂停态操作层（Operations）★ 本 Mod 核心
 职责：承载"暂停下可执行"的具体操作实现。每条操作 = 一个自包含的动作（写值 / 生成替换 / 触发该实体自身流程），**不得依赖时间推进**。
 - 操作基座：`实体特征 → 操作集合`，与 M1 的模板注册表同源
 - 首批操作（按 §3.3 已验证的公开入口实现）：
   1. **植物生长进度**（`Growing`）——首个落地项，作为"暂停态操作"命题的最小验证
+     - **落地（批 2b 已实现）**：`Operations/GrowthOperation.cs`；取组件照原版 `PlantBranchGrower.cs:402-403`（`GetComponent<IManageGrowingStates>()` 优先、`GetSMI<IManageGrowingStates>()` 兜底）⇒ 凡有生长状态的实体（植物、树枝类）都可调，不硬编码 `Growing`；滑杆单位 **0–100 %**（整数刻度），读 `PercentGrown()×100`、写 `OverrideMaturityLevel(v/100)`
   2. 植物变异（`MutantPlant`，DLC 门控）
   3. 动物年龄（`AgeMonitor`）+ 立即成体（`BabyMonitor.Instance.SpawnAdult()`）
   4. 动物野性/驯服（`WildnessMonitor`）+ 血量（`Health`）
@@ -167,7 +182,12 @@
 | Mod ID | `Weik.DP.DebugPlus` |
 | Mod 入口 | `DebugPlusMod` |
 | 补丁类 | `Xxx_目标_Patch`（如 `UserMenu_OnRefresh_Patch`） |
-| 自研类型 | `DpXxxTool` / `DpXxxPanel` / `DpXxxOp` / `DpXxxRow` |
+| UI 屏 / 面板 | 放 `UI/View/`：`ConfigPanel` 等 |
+| UI 控件 / 构建工厂 | 放 `UI/Component/`：`ConfigButton`、`ParameterRow`、`ParameterRowFactory` |
+| 操作与参数 | 放 `Operations/`：`GrowthOperation`、`GrowthParameter`、`OperationRegistry` |
+| 文件名 | 与文件内的主类同名（`GrowthOperation.cs`） |
+| ⚠️ 前缀 | **不加 `Dp` 之类的前缀**（用户 2026-09-13 定）：靠命名空间 `DebugPlus.*` 区分，类名直接写业务名 |
+| ⚠️ 缩写 | **一律写全，禁 `Op` / `Param` / `Mgr` / `Cfg` 这类缩写**（同上）：`Operation` 不写 `Op`、`Parameter` 不写 `Param` |
 | 禁用 | 不保留任何上游类名（零上游代码） |
 
 ## 五、阶段路线

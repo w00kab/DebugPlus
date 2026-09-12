@@ -1,6 +1,7 @@
+using DebugPlus.UI.View;
 using UnityEngine;
 
-namespace DebugPlus.UI
+namespace DebugPlus.UI.Component
 {
     /// <summary>
     /// 实体详情界面的「修改配置」用户菜单按钮（M1 落地细节之二）。
@@ -17,7 +18,7 @@ namespace DebugPlus.UI
     ///
     /// 本组件**不做任何序列化**：它纯粹为 UI 存在，读档后由 A1 重新挂上，不影响存档。
     /// </summary>
-    public class DpConfigButton : KMonoBehaviour
+    public class ConfigButton : KMonoBehaviour
     {
         /// <summary>按钮排序值：UserMenu.AppendToScreen 内按此值升序排列，越大越靠后。</summary>
         private const float SortOrder = 20f;
@@ -29,8 +30,8 @@ namespace DebugPlus.UI
         private const int RefreshUserMenu = 493375141;
 
         /// <summary>原版式静态转发委托（Clearable.cs:222 同款结构）。</summary>
-        private static readonly global::EventSystem.IntraObjectHandler<DpConfigButton> OnRefreshUserMenuDelegate =
-            new global::EventSystem.IntraObjectHandler<DpConfigButton>(delegate (DpConfigButton component, object data)
+        private static readonly global::EventSystem.IntraObjectHandler<ConfigButton> OnRefreshUserMenuDelegate =
+            new global::EventSystem.IntraObjectHandler<ConfigButton>(delegate (ConfigButton component, object data)
             {
                 component.OnRefreshUserMenu(data);
             });
@@ -44,10 +45,10 @@ namespace DebugPlus.UI
             {
                 return;
             }
-            DpConfigButton button = go.GetComponent<DpConfigButton>();
+            ConfigButton button = go.GetComponent<ConfigButton>();
             if (button == null)
             {
-                button = go.AddComponent<DpConfigButton>();
+                button = go.AddComponent<ConfigButton>();
             }
             // Awake 只在激活的 GameObject 上立即触发；若父级此刻非激活，这里补齐框架初始化
             // （InitializeComponent 由 isInitialized 守卫，已初始化时立即返回；Subscribe 依赖它赋值的 obj）。
@@ -68,7 +69,7 @@ namespace DebugPlus.UI
                 return;
             }
             subscribed = true;
-            Subscribe<DpConfigButton>(RefreshUserMenu, OnRefreshUserMenuDelegate);
+            Subscribe<ConfigButton>(RefreshUserMenu, OnRefreshUserMenuDelegate);
         }
 
         private void OnRefreshUserMenu(object data)
@@ -92,7 +93,7 @@ namespace DebugPlus.UI
 
         private void OnClick()
         {
-            DpConfigPanel.OpenFor(gameObject);
+            ConfigPanel.OpenFor(gameObject);
         }
     }
 }

@@ -1,8 +1,10 @@
+using DebugPlus.Operations;
+using DebugPlus.UI.Component;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DebugPlus.UI
+namespace DebugPlus.UI.View
 {
     /// <summary>
     /// DebugPlus 配置面板（M1 落地细节之三）：**自建**的 KModalScreen 模态弹窗。
@@ -28,10 +30,9 @@ namespace DebugPlus.UI
     /// 生命周期：KScreen.Deactivate() 末尾会 Destroy(gameObject)（KScreen.cs:299-302），
     /// 所以不存在「复用同一个实例」，改为「已有实例就不再叠第二个」。
     /// </summary>
-    public class DpConfigPanel : KModalScreen
+    public class ConfigPanel : KModalScreen
     {
         private const float WindowWidth = 460f;
-        private const float WindowHeight = 300f;
         private const float TitleHeight = 34f;
         private const float TextRowHeight = 26f;
         private const float NoteRowHeight = 52f;
@@ -39,11 +40,19 @@ namespace DebugPlus.UI
         private const float ButtonWidth = 150f;
         private const float ButtonHeight = 36f;
 
+        /// <summary>窗口内边距的上下合计 + 子项间距（与 BuildWindow 里的 RectOffset / spacing 一致）。</summary>
+        private const float PanelPaddingVertical = 28f;
+
+        private const float Spacing = 8f;
+
         /// <summary>当前唯一实例（UnityEngine.Object 的 == null 对已销毁对象成立，天然处理关闭后的空引用）。</summary>
-        private static DpConfigPanel instance;
+        private static ConfigPanel instance;
 
         private GameObject windowRoot;
+        private RectTransform windowRect;
         private TextMeshProUGUI targetText;
+        private GameObject noteRow;
+        private GameObject buttonRow;
 
         /// <summary>
         /// 打开面板。若已有面板，则只把它抬到最上层（不叠加第二个）。
@@ -67,14 +76,14 @@ namespace DebugPlus.UI
                 return;
             }
 
-            var go = new GameObject("DpConfigPanel");
+            var go = new GameObject("ConfigPanel");
             // 规则：新建 GameObject 先加 RectTransform，再加其它 UI 组件（LayoutElement 等会因
             // [RequireComponent] 自动补一个，重复添加会 NRE）。
             var rootRect = go.AddComponent<RectTransform>();
             Stretch(rootRect);
 
             // Awake → InitializeComponent → OnPrefabInit：遮罩与内容区在此生成。
-            var panel = go.AddComponent<DpConfigPanel>();
+            var panel = go.AddComponent<ConfigPanel>();
             panel.InitializeComponent(); // 幂等兜底（框架已初始化时立即返回）
             panel.SetTarget(target);
 
@@ -84,9 +93,7 @@ namespace DebugPlus.UI
             panel.Activate();
 
             instance = panel;
-            Debug.Log("[DebugPlus] 配置面板已打开：" + TargetName(target));
         }
-
         protected override void OnPrefabInit()
         {
             base.OnPrefabInit(); // KModalScreen：建遮罩、ConsumeMouseScroll = true、activateOnSpawn = true
@@ -112,12 +119,65 @@ namespace DebugPlus.UI
             base.OnCleanUp();
         }
 
+        /// <summary>
+        /// 绑定目标：写目标名 → 按注册表建参数行 → 无参数行时才显示提示 → 按行数重算窗口高度。
+        /// 调用时机在 Activate() 之前（OpenFor 里），所以这里是"先摆好再显示"。
+        /// </summary>
         private void SetTarget(GameObject target)
         {
             if (targetText != null)
             {
                 targetText.text = TargetName(target);
             }
+
+            int rowCount = BuildParamRows(target);
+
+            if (noteRow != null)
+            {
+                noteRow.SetActive(rowCount == 0); // 布局会跳过不激活的子项，不留空档
+            }
+            if (windowRect != null)
+            {
+                windowRect.sizeDelta = new Vector2(WindowWidth, ComputeHeight(rowCount));
+            }
+
+            Debug.Log("[DebugPlus] 配置面板已打开：" + TargetName(target) + "（参数行 " + rowCount + " 行）");
+        }
+
+        /// <summary>
+        /// 按注册表构建参数行，逐行插到按钮行之前。
+        /// 全部是根 VLG 的**直接子节点** —— 规则：不在 ONI 里嵌套 VLG → VLG。
+        /// </summary>
+        private int BuildParamRows(GameObject target)
+        {
+            var parameters = OperationRegistry.BuildParameters(target);
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                ParameterRow row = ParameterRowFactory.Create(parameters[i], windowRoot.transform);
+                if (buttonRow != null)
+                {
+                    row.transform.SetSiblingIndex(buttonRow.transform.GetSiblingIndex());
+                }
+            }
+            return parameters.Count;
+        }
+
+        /// <summary>窗口高度按实际行数算（标题 + 目标名 + 参数行 / 提示 + 按钮行 + 间距 + 内边距）。</summary>
+        private static float ComputeHeight(int rowCount)
+        {
+            float children = TitleHeight + TextRowHeight + ButtonRowHeight;
+            float gaps = 2f;
+            if (rowCount > 0)
+            {
+                children += rowCount * ParameterRowFactory.RowHeight;
+                gaps += rowCount;
+            }
+            else
+            {
+                children += NoteRowHeight;
+                gaps += 1f;
+            }
+            return children + gaps * Spacing + PanelPaddingVertical;
         }
 
         private static string TargetName(GameObject target)
@@ -144,7 +204,8 @@ namespace DebugPlus.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(WindowWidth, WindowHeight);
+            rect.sizeDelta = new Vector2(WindowWidth, ComputeHeight(0));
+            windowRect = rect;
 
             var image = windowRoot.AddComponent<Image>();
             image.color = new Color(0.15f, 0.17f, 0.2f, 1f); // 不透明底
@@ -152,7 +213,7 @@ namespace DebugPlus.UI
 
             var vlg = windowRoot.AddComponent<VerticalLayoutGroup>();
             vlg.padding = new RectOffset(16, 16, 14, 14);
-            vlg.spacing = 8f;
+            vlg.spacing = Spacing;
             vlg.childAlignment = TextAnchor.UpperCenter;
             vlg.childControlWidth = true;
             vlg.childControlHeight = true;
@@ -162,27 +223,28 @@ namespace DebugPlus.UI
             CreateText(windowRoot, "title", STRINGS.UI.DEBUGPLUS.PANEL_TITLE, TitleHeight, 20f);
             TextMeshProUGUI target = CreateText(windowRoot, "target", "", TextRowHeight, 16f);
             targetText = target;
-            CreateText(windowRoot, "note", STRINGS.UI.DEBUGPLUS.PANEL_PENDING, NoteRowHeight, 14f);
+            // 参数行由 SetTarget → BuildParamRows 插在下面的按钮行之前；无参数行时这条提示才显示。
+            noteRow = CreateText(windowRoot, "note", STRINGS.UI.DEBUGPLUS.PANEL_NO_PARAMS, NoteRowHeight, 14f).gameObject;
 
             CreateButtonRow(windowRoot);
         }
 
         private void CreateButtonRow(GameObject window)
         {
-            var row = new GameObject("buttonRow");
-            row.transform.SetParent(window.transform, false);
-            row.AddComponent<RectTransform>();
-            row.AddComponent<LayoutElement>().preferredHeight = ButtonRowHeight;
+            buttonRow = new GameObject("buttonRow");
+            buttonRow.transform.SetParent(window.transform, false);
+            buttonRow.AddComponent<RectTransform>();
+            buttonRow.AddComponent<LayoutElement>().preferredHeight = ButtonRowHeight;
 
-            var hlg = row.AddComponent<HorizontalLayoutGroup>();
-            hlg.spacing = 8f;
+            var hlg = buttonRow.AddComponent<HorizontalLayoutGroup>();
+            hlg.spacing = Spacing;
             hlg.childAlignment = TextAnchor.MiddleCenter;
             hlg.childControlWidth = true;
             hlg.childControlHeight = true;
             hlg.childForceExpandWidth = false;  // ★ VLG 子项为 HLG 时必须 false
             hlg.childForceExpandHeight = false; // ★ 规则：HLG 不作为 VLG 子项时也不拉伸高度
 
-            CreateButton(row, STRINGS.UI.DEBUGPLUS.PANEL_CLOSE, Close);
+            CreateButton(buttonRow, STRINGS.UI.DEBUGPLUS.PANEL_CLOSE, Close);
         }
 
         private void CreateButton(GameObject parent, string label, System.Action onClick)

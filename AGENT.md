@@ -62,9 +62,10 @@
 
 ## 4. 目录与命名（plan.md §四）
 
-结构：`Patches/`（补丁类）、`UI/`（用户菜单按钮、模态弹窗、参数行工厂）、`Ops/`（暂停态操作定义与动作集）、
+结构：`Patches/`（补丁类）、`UI/View/`（屏与面板）、`UI/Component/`（控件与构建工厂）、`Operations/`（暂停态操作定义与动作集）、
 `Spawner/`（生成增强）、`Assets/`（图标说明）、根 `STRINGS.cs`。
-命名：补丁类 `Xxx_目标_Patch`；自研 `DpXxxTool`/`DpXxxPanel`/`DpXxxOp`/`DpXxxRow`。
+命名：补丁类 `Xxx_目标_Patch`；自研类**不加前缀**（靠命名空间 `DebugPlus.*` 区分）、**写全不缩写**
+（`Operation` 不写 `Op`、`Parameter` 不写 `Param`、`Config` 不写 `Cfg`）——用户 2026-09-13 明确要求，详见 plan.md §四 命名规范表。
 **禁止保留任何上游类名**（零上游代码 → 不搬运、不派生、不保留上游痕迹）。
 
 ## 5. 参考区（**仅思路参考，禁止搬运代码**）
@@ -111,10 +112,16 @@
 - 新 P1 剩余内容：打通"用户菜单按钮 → 模态弹窗 → 参数行"最小链，并落地**植物生长进度**
   （暂停下拉动即生效）；首个真实补丁落在 `Patches/`（命名 `Xxx_目标_Patch`）
 - ✅ **批 2a（M1 最小链外壳）已实现并编译部署**（2026-09-13，待用户实机验证）：
-  `Patches/UserMenu_AppendToScreen_Patch.cs`（Prefix 注入）、`UI/DpConfigButton.cs`（实体身上的用户菜单按钮）、
-  `UI/DpConfigPanel.cs`（自建 `KModalScreen` 弹窗）、`STRINGS.cs` + `DebugPlusMod.cs`（本 Mod 自己的
+  `Patches/UserMenu_AppendToScreen_Patch.cs`（Prefix 注入）、`UI/Component/ConfigButton.cs`（实体身上的用户菜单按钮）、
+  `UI/View/ConfigPanel.cs`（自建 `KModalScreen` 弹窗）、`STRINGS.cs` + `DebugPlusMod.cs`（本 Mod 自己的
   LocString 注册）。**关键结论已沉淀进 plan.md §3.1 的"自建模态屏的框架依据"块**
   （`KScreen.Activate()` 自足、`KMonoBehaviour` 运行时 `AddComponent` 即初始化、`Deactivate()` 会销毁实例、
   `pause` 默认 `true` 必须显式关掉、全局 `Action` 枚举会遮蔽 `System.Action`）。
-- ⏳ **批 2b（参数行 + 植物生长进度）尚未批准**；本地 git 仓库已初始化并提交批 1 后的干净基线
-  （`4aaf9e4`，分支 `main`），**远程未推送**。
+- ✅ **批 2b（参数行 + 植物生长进度）已实现并编译部署**（2026-09-13，待用户实机验证）：
+  `Operations/OperationRegistry.cs`（`IOperation` 登记表，判定与能力同源）、`Operations/GrowthOperation.cs`（`IManageGrowingStates`
+  读/写，**写入口收 0–1 比例**）、`Operations/Parameter.cs`（参数抽象）、`UI/Component/ParameterRowFactory.cs` + `UI/Component/ParameterRow.cs`
+  （**纯代码自建 `KSlider`**：原版滑杆全来自拿不到的预制体引用；`KNumberInputField` 因
+  `inputField` 是 `[SerializeField] private` 而**不可**纯代码构造）、`UI/View/ConfigPanel.cs`（接参数行 + 动态高度）。
+  **关键结论已沉淀进 plan.md §3.1 的"参数行素材来源的框架依据"块**。
+- 本地 git 仓库：批 1 基线 `4aaf9e4` → README `ee138c3` → 文档同步 `9bf8108` → **批 2a `2a29d44`**（已提交）；
+  批 2b 的改动**尚未提交**（等用户说"阶段完成"）。分支 `main`，**远程未推送**。
