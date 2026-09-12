@@ -124,4 +124,11 @@
   `inputField` 是 `[SerializeField] private` 而**不可**纯代码构造）、`UI/View/ConfigPanel.cs`（接参数行 + 动态高度）。
   **关键结论已沉淀进 plan.md §3.1 的"参数行素材来源的框架依据"块**。
 - 本地 git 仓库：批 1 基线 `4aaf9e4` → README `ee138c3` → 文档同步 `9bf8108` → **批 2a `2a29d44`**（已提交）；
-  批 2b 的改动**已提交**（`cd09869`，含目录与命名整理）。分支 `main`，**远程未推送**（本地领先 `origin/main` 3 个提交）。
+  批 2b 的改动**已提交**（`cd09869`，含目录与命名整理），其崩溃修复为 `bdfce31`。
+  分支 `main`，**远程未推送**（本地领先 `origin/main` 4 个提交）。
+- 🔧 **批 2b 实机首跑即崩 → 已定位修复、02:44 重新部署（待复验）**：`ParameterRowFactory.CreateSlider` 里
+  手柄的 `RectTransform` 是 `null` ⇒ NRE。**根因**：`NewUIObject` 已挂过 `RectTransform`，再
+  `AddComponent<RectTransform>()` 时 **Unity 返回 `null` 而不抛异常**，下一句设锚点才崩。
+  修复：`handle.GetComponent<RectTransform>()`。**定位法（以后照做）**：`player.log` 的栈带 **IL 偏移**
+  （`[0x0010a]`）→ `ildasm` 反汇编**本 Mod 自己的** DLL（无需第三方反编译器，更不需反编译本体）→
+  在反汇编里搜该偏移即见 `ldloc.s handleRect` + `callvirt …set_anchorMin`。详见 NEXT_STEPS.md §3 教训 8/9。

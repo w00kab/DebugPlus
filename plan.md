@@ -140,6 +140,10 @@
   - **落地（批 2b 已实现）**：`UI/Component/ParameterRowFactory.cs`（构建）+ `UI/Component/ParameterRow.cs`（绑定）；行结构 = 标签 TMP + `KSlider` + 读数 TMP，行高 40、插在按钮行之前
   - `ParameterRow.Bind` 的**顺序要求**：先设 `minValue` / `maxValue` / `wholeNumbers` / `value`，**最后**才订阅 `onValueChanged` —— 否则设初值本身就会把值写回游戏一次
   - **滑杆 = 纯代码 `KSlider`**：内部层级照 Unity 原版滑杆（`background` / `fillArea`→`fill` / `handleArea`→`handle`），`Slider` 运行时自己驱动 `fill` 与 `handle` 的锚点，容器只提供矩形；可交互层用不透明 `background` 撑住命中（点它之后事件冒泡到 `Slider`）
+  - ⚠️ **纯代码建 UI 的一条硬性框架约束（批 2b 实机 NRE 定位所得，2026-09-13）**：新建的 UI GameObject **只能有一个 `RectTransform`**，
+    对已有 RectTransform 的 GO 再 `AddComponent<RectTransform>()` 时 **Unity 返回 `null`（不抛异常）**，随后对 null 设锚点才 NRE。
+    ⇒ 约定：本 Mod 所有 UI GameObject 一律由统一的 `NewUIObject()` 创建（内部挂 RectTransform），
+    调用方要改锚点/尺寸只能 `GetComponent<RectTransform>()`；`LayoutElement` / `Image` / `KSlider` 等则照常 `AddComponent`。
   - **不用 `KNumberInputField`**（纯代码无法合法构造，见 §3.1）；后续行类型（勾选 `MultiToggle`、下拉选择器）待 P2，届时同样按"能不能纯代码构造"逐个核对框架源码
 - **实体能力模板注册表**：`实体特征 → 参数行定义列表`（选中实体后按特征匹配，生成对应行；无匹配则不显示按钮或提示"该实体无可调参数"）
   - **落地（批 2b 已实现）**：`Operations/OperationRegistry.cs`（`IOperation` 接口 + 登记表）；**判定与能力同源**——A1 的 `OperationRegistry.IsConfigurable(go)` 与面板的 `OperationRegistry.BuildParameters(go)` 走同一批登记项，故不可能出现"按钮在但面板空白"；初版只登记 `Operations/GrowthOperation.cs`

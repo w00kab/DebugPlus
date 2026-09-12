@@ -25,6 +25,10 @@ namespace DebugPlus.UI.Component
     ///
     /// 布局规则（oni-ui）：新建 GO 先加 RectTransform；TMP 独占 GO 且必须设 Localization.FontAsset；
     /// 装饰层 raycastTarget = false、可交互层用不透明底"撑住"命中；只用「根 VLG → 行 HLG」一层嵌套。
+    ///
+    /// ⚠️ 血的教训（2026-09-13 实机 NRE · IL 偏移 0x10A 定位）：本文件的 GO 一律由 NewUIObject 建，
+    /// 它已经挂好 RectTransform ⇒ 后续**只能 GetComponent&lt;RectTransform&gt;() 取**，
+    /// 再 AddComponent 一次会**返回 null**（不是抛异常），下一句给 null 设锚点才崩。
     /// </summary>
     public static class ParameterRowFactory
     {
@@ -105,7 +109,9 @@ namespace DebugPlus.UI.Component
             GameObject handleArea = NewUIObject("handleArea", sliderGO.transform);
             StretchWithInset(handleArea, HandleWidth * 0.5f, HandleWidth * 0.5f);
             GameObject handle = NewUIObject("handle", handleArea.transform);
-            var handleRect = handle.AddComponent<RectTransform>();
+            // ★ 只能 GetComponent：NewUIObject 已经挂过 RectTransform，再 AddComponent 会返回 null
+            //   （同一 GameObject 上不允许两个 RectTransform）—— 2026-09-13 实机 NRE 就死在这里。
+            var handleRect = handle.GetComponent<RectTransform>();
             handleRect.anchorMin = new Vector2(0f, 0f);
             handleRect.anchorMax = new Vector2(0f, 1f);
             handleRect.pivot = new Vector2(0.5f, 0.5f);
@@ -135,7 +141,10 @@ namespace DebugPlus.UI.Component
             layout.minHeight = height;
         }
 
-        /// <summary>新建 UI 用 GameObject：先挂 RectTransform，再加其它 UI 组件（oni-ui 规则 1）。</summary>
+        /// <summary>
+        /// 新建 UI 用 GameObject：先挂 RectTransform，再加其它 UI 组件（oni-ui 规则 1）。
+        /// ⚠️ 用本方法建出来的 GO 已有 RectTransform，调用方必须用 GetComponent 取，不能再 AddComponent。
+        /// </summary>
         private static GameObject NewUIObject(string name, Transform parent)
         {
             var go = new GameObject(name);

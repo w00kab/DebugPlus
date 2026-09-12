@@ -27,10 +27,18 @@
     `bin/` 与 `*.dll` 经 `git check-ignore` 确认被忽略。
   - ⚠️ **批 2a 的代码已提交**：`2a29d44`（`feat(M1): 批 2a 实体配置弹窗外壳`，8 文件 / +534 −46）。
 - 已部署：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
-  （批 1 = 4608 B → 批 2a = 11776 B → **批 2b = 16896 B**，2026-09-13 02:20；本地与部署目录 SHA256 一致）。
+  （批 1 = 4608 B → 批 2a = 11776 B → 批 2b = 16896 B → **2b 修复版 = 16896 B**，
+  2026-09-13 02:44；本地与部署目录 SHA256 一致 `151B93C62733FCB6…`）。
 - ✅ **批 2a · M1 最小链外壳：已实现、编译、部署完成** → **⏸ 待用户实机验证**（见 §4 第 1–4 条）。
 - ✅ **批 2b（A4–A6 + A7b）：已实现、编译、部署完成** → **⏸ 待用户实机验证**（见 §4 第 5–7 条）。
   **2b 的代码已提交**：`cd09869`（含 `UI/View`+`UI/Component` 拆分、`Ops`→`Operations`、去 `Dp` 前缀改名）。
+- 🔧 **批 2b 实机首次运行即崩，已定位并修复（2026-09-13 02:44 重新部署，待复验）**：
+  `NullReferenceException` 在 `ParameterRowFactory.CreateSlider` → `ConfigPanel.BuildParamRows`
+  （点「修改配置」按钮时）。**定位手段**：`player.log` 栈带 IL 偏移 `[0x0010a]` → `ildasm` 反汇编本 Mod DLL →
+  搜到 `IL_010a` 是 `ldloc.s handleRect` + `callvirt RectTransform::set_anchorMin` ⇒
+  手柄的 `handleRect` 是 `null`。**根因**：`NewUIObject` 已挂过 `RectTransform`，
+  建手柄时又 `handle.AddComponent<RectTransform>()` 一次 ⇒ **Unity 返回 `null`（不抛异常）**。
+  修复：改为 `handle.GetComponent<RectTransform>()`（见 §3 教训 8/9）。改的是 `UI/Component/ParameterRowFactory.cs` 一处。
 
 ## 1. 批 2 施工单：M1 最小链 + 植物生长进度
 
@@ -142,6 +150,16 @@
    判据是**它依赖的引用是不是可以运行时赋值的公开成员**，不是类名像不像 UI 组件。
 7. **Unity 组件的 Awake 陷阱**：往**已激活**的 GameObject 上 `AddComponent` 会立刻跑 Awake，
    若该 Awake 要读尚未赋值的 `[SerializeField]` 式引用就会 NRE ⇒ 需要时"**先 SetActive(false) → 挂好引用 → 再激活**"（本 Mod 建 `KSlider` 用的就是这招）。
+8. 🔴 **`AddComponent<RectTransform>()` 在已有 RectTransform 的 GameObject 上返回 `null`（不抛异常！）**：
+   2026-09-13 实机批 2b 崩溃的直接原因 —— `NewUIObject` 已挂过 RectTransform，建手柄时又 `AddComponent` 一次拿到 `null`，
+   下一句 `handleRect.anchorMin = …` 才 NRE。**凡是"有没有 RectTransform"不确定的 GO，一律 `GetComponent<RectTransform>()`**。
+   （ini-ui 规则 1 本来就写了这条，之前只在 ConfigPanel 里守住了，工厂里漏了 ⇒ 规则要在**每个新建 UI 的辅助方法**里落实。）
+9. **定位 mod 自身 NRE 的正确姿势（本轮验证有效，以后照做）**：
+   ① `%USERPROFILE%\AppData\LocalLow\Klei\Oxygen Not Included\player.log` 里的 IL2CPP/Mono 栈带 **IL 偏移**（如 `[0x0010a]`）；
+   ② `ildasm /out=… /item:命名空间.类 本Mod的DebugPlus.dll` 反汇编自己（**不用任何第三方反编译器**）；
+   ③ 在反汇编里搜 `IL_010a`，看它到底在调谁 —— 本次直接读到 `ldloc.s handleRect` + `callvirt RectTransform::set_anchorMin`
+   ⇒ 一秒锁定 `handleRect` 为 null，免去"加日志 → 重编 → 再让用户复现"的多轮往返。
+   注意：`Release`（`DebugType=pdbonly` + `optimize+`）的行号不可靠，**以 IL 偏移为准**。
 
 ## 4. ⏸ 待用户实机验证（未验证前不得当成事实）
 
@@ -167,7 +185,7 @@ plan.md §七 原有 4 条（留待后续批次）：
 
 ## 5. 待拍板 / 未决
 
-- **是否推送仍未定**：本地 `main` 领先 `origin/main` **3 个提交**（`2a29d44` 批 2a、`cd09869` 批 2b + 改名、`f51426e` 文档同步），
+- **是否推送仍未定**：本地 `main` 领先 `origin/main` **4 个提交**（`2a29d44` 批 2a、`cd09869` 批 2b + 改名、`8fcfced` 文档同步、`bdfce31` 2b 崩溃修复），
   等用户说推再推（仓库纪律：不擅自 push）。
 - **滑杆来源已定案**（批 2b 执行中拍板，已写进 plan.md §3.1）：**纯代码自建 `KSlider`**，不用 `KNumberInputField`；
   若实机上滑杆手感/外观不满意，可换的余地是"克隆场景里现存的原版滑杆实例"（需要先有带滑杆界面的建筑被选中）。
