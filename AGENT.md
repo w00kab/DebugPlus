@@ -54,6 +54,10 @@
 - 部署目标：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
   （workspace 外 → 大概率触发沙箱拒绝 → 对同一条命令申请一次提权重试）
 - 日志：`%USERPROFILE%\AppData\LocalLow\Klei\Oxygen Not Included\player.log`（前缀 `[DebugPlus]`）
+- 远程仓库：`https://github.com/w00kab/DebugPlus`（`origin`，分支 `main`）。仓库根 = 工程根。
+  ⚠️ 推送需认证 → 受限沙箱下 git 凭证管理器会失败（`sh.exe: couldn't create signal pipe`），
+  此时需在放宽策略下重跑同一条 `git push`（勿改用其它方式绕过凭据）。
+  ⚠️ 本机 hosts 把 github 全系域名指向 `127.0.0.1`（`#S302`）→ 浏览器打不开网页版，但命令行 git 可连。
 - 真机验证由用户启动游戏执行；编译/部署自验后必须汇报"做了什么/如何验证/风险/下一步"
 
 ## 4. 目录与命名（plan.md §四）
@@ -85,7 +89,8 @@
 
 ## 7. 未定事项（勿擅动）
 
-- git 仓库、CHANGELOG.md 是否建立：待用户拍板（plan.md ❓3；**NEXT_STEPS.md 已建立**，施工单与待办归它）
+- ~~git 仓库是否建立~~：**已建立**（2026-09-13，`https://github.com/w00kab/DebugPlus`，Public，分支 `main`）；
+  `CHANGELOG.md` 是否建立**仍未决**（勿擅建）
 - 首版目标游戏版本/DLC 范围（❓2）；M3 生成物初始化补全的触发方式（生成时自动 / 点开时按需，❓1）
 - M4 创造建筑套件：屏蔽清单待盘点 + 用户勾选（❓4）
 - plan.md §七 的 4 条实机验证点（植物/间歇泉刷新、`SpawnAdult` 安全性、非建筑实体用户菜单）未验证前不得当成已定事实

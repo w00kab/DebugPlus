@@ -20,6 +20,12 @@
     本地 `bin` 与已部署 DLL 扫描 `SandboxTools/FilteredDestroyTool/DestroyFilter/DestroyParameterMenu/
     PeterHan/PLib/PUtil/SpriteRegistry` **全 0 命中**；`obj` 构建缓存 0 残留引用。
 - 已部署：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`（`DebugPlus.dll` 4608 B）
+- ✅ **git 仓库已建立并推送成功**（2026-09-13，用户拍板：Public + 仓库名 `DebugPlus`）：
+  - 本地仓库在工程根 `F:\ONI_ModDev\ONI_ModCode\Debug Plus`（**仓库根即工程根**，非 `DebugPlus/` 子目录）；
+    远程 `origin` = `https://github.com/w00kab/DebugPlus.git`，分支 `main`（已设 upstream）。
+  - 基线两提交：`4aaf9e4`（去上游化后的干净基线）→ `ee138c3`（新增 `README.md`）。
+  - 自验：远程 `refs/heads/main` 提交号与本地一致；`raw.githubusercontent.com` 可取回 `README.md`/`.gitignore`；
+    `MSBuild /p:Configuration=Release` 编译通过（产物 4608 B）；`bin/` 与 `*.dll` 经 `git check-ignore` 确认被忽略。
 - ⏳ **批 2 尚未获逐项批准**：下方 A1–A8 是"**已出方案、等点头**"状态，**一行代码都还没写**。
 
 ## 1. 批 2 施工单：M1 最小链 + 植物生长进度
@@ -88,6 +94,7 @@
 
 - 批 2 的 A1–A8：**等用户批准**（可拆 2a / 2b，或一次做完）。
 - `ButtonInfo` 的图标名（必须是原版现存 sprite 名）——施工时挑定后实报，并落进 `Assets/README.md`。
-- git 仓库是否建立、`CHANGELOG.md` 是否随工程建立（plan.md ❓3；`NEXT_STEPS.md` 已由本文件落实）。
+- ~~git 仓库是否建立~~ → **已建立并推送**（2026-09-13，见 §0；`https://github.com/w00kab/DebugPlus`）。
+- `CHANGELOG.md` 是否随工程建立：**仍未决**（与上述 git 仓库是两件事，未获批准，勿擅建）。
 - M3 生成物初始化补全的触发方式：生成时自动 / 点开时按需（plan.md ❓1）。
 - M4 创造建筑套件屏蔽清单（plan.md ❓4）。
