@@ -48,7 +48,7 @@
 | ⚠️ 生成器关键缺陷 | `ConfigureEntitySelector` 的候选列表**只收录命中内置分类的实体**（食物/生物/蛋/植物/种子/装备/彗星/工业品/矿石/瓶装液/罐装气…）→ **建筑、家具、装饰、遗迹、喷泉、工艺品等大量实体原版选不到、搜不到**。**本 Mod 不修这条**（属 SandboxTools 领域，见 §二.1 与 §四 M3）；本 Mod 关心的是它的下游：生成出来的实体**缺失初始化**（§3.2） |
 | 选择管线 | 玩家选中实体走 `SelectTool`（`InterfaceTool.GetObjectUnderCursor<T>`），选中结果在 `SelectTool.Instance.selected`（`KSelectable`），**公开字段**，原版 DevTool 系列全用它 |
 | 用户菜单按钮 | 实体详情屏第二面板的按钮区 = `Game.Instance.userMenu`（`UserMenuScreen : KIconButtonMenu`）。加按钮：`Subscribe((int)GameHashes.RefreshUserMenu, handler)` → 在 handler 里 `Game.Instance.userMenu.AddButton(gameObject, new KIconButtonMenu.ButtonInfo(...), sort_order)`；改状态后 `Game.Instance.userMenu.Refresh(gameObject)` 立即刷新文字。原版 `BuildingEnabledButton` 同款模式 |
-| 模态弹窗 | `ConfirmDialogScreen : KModalScreen`，预制体在 `ScreenPrefabs.Instance.ConfirmDialogScreen`；`PopupConfirmDialog(text, on_confirm, on_cancel, configurable_text, on_configurable_clicked, title_text, confirm_text, cancel_text, image_sprite)`——**只有文字 + 三个按钮位，没有输入控件**，故本 Mod 需自建"模态屏克隆该预制体 + 自行构建内容区" |
+| 模态弹窗 | `ConfirmDialogScreen : KModalScreen`，预制体在 `ScreenPrefabs.Instance.ConfirmDialogScreen`；`PopupConfirmDialog(text, on_confirm, on_cancel, configurable_text, on_configurable_clicked, title_text, confirm_text, cancel_text, image_sprite)`——**只有文字 + 三个按钮位，没有输入控件**；另有 `InfoDialogScreen`（自带私有 `contentContainer` + `AddUI<T>` / `AddSpacer` 等加内容入口）。本 Mod **两者都不克隆**，改为**自建 `KModalScreen` 子类**（可行性依据见下方框架事实块：`Activate()` 自足） |
 | 参考价值（不采用） | DebugButton 在 `TopLeftControlScreen.OnActivate` 克隆 `sandboxToggle` 做左上按钮组、`IRender200ms` 周期刷三态——本 Mod **不复制**（那是它的领域，见 §一"明确不做"） |
 
 > **用户菜单按钮注入链（2026 实测，源码逐行可查）**——本 Mod 唯一交互入口的实现依据：
@@ -58,6 +58,16 @@
 > - `UserMenu.AddButton(GameObject go, ButtonInfo button, float sort_order = 1f)`（`UserMenu.cs:16`）：内部把 `onClick` 包一层"回调 + `Game.Instance.Trigger(1980521255, go)`" → **点击后菜单自己重建，无需手动刷新**。
 > - 刷新链：`Game.Instance.userMenu.Refresh(go)` = `Game.Instance.Trigger(1980521255, go)`（`UserMenu.cs:10`）→ `UserMenuScreen.OnUIRefresh` → `UserMenuScreen.Refresh(go)`（`UserMenuScreen.cs:75`，**带 `go == selected` 守卫**）→ `AppendToScreen`。
 > - `UserMenuScreen` 的 `buttonInfos` / `slidersInfos` / `sliders` / `selected` 均**私有** → 不自建平行通道，只走"实体自带组件 + `UserMenu.AddButton`"这条原版正道。
+
+> **自建模态屏的框架依据（2026 反编译 `Assembly-CSharp-firstpass` 逐行核对）**——M1 弹窗不做预制体克隆的依据：
+> - **运行时组件生命周期**：`KMonoBehaviour.Awake()`（`KMonoBehaviour.cs:35`）→ `InitializeComponent()`（:45，**public 且由 `isInitialized` 守卫，可安全重复调用**）→ `OnPrefabInit()`（:63）；`Start()`（:129）→ `Spawn()`（:141，`isSpawned` 守卫）→ `OnSpawn()`（:158）。
+>   ⇒ **运行时 `AddComponent` 即完成框架初始化**（Awake 当场触发），**不需要预制体**；`Subscribe` 依赖的 `obj` 也在 `InitializeComponent` 内赋值（:56 / :253-255）。
+> - `KScreen.Activate()`（`KScreen.cs:276-282`）：`SetActive(true)` → `KScreenManager.Instance.PushScreen(this)` → `OnActivate()` → `isActive = true`，**自足、不依赖预制体**；`KScreenManager.AddExistingChild(parent, go)`（`KScreenManager.cs:253-261`）= `SetParent(…, false)` + 同步 `layer`。
+> - `KScreen.Deactivate()`（`KScreen.cs:290-303`）：`OnDeactivate()` → `PopScreen` → **`Destroy(gameObject)`** ⇒ 关闭即销毁，**不存在"复用同一实例"**，只能"已有实例就不再叠第二个"。
+> - `KModalScreen.OnPrefabInit()`（`KModalScreen.cs:9-30`）自建全屏半透明遮罩（`Color32(0,0,0,160)` + `raycastTarget = true`）并置位 `ConsumeMouseScroll` / `activateOnSpawn`；`OnCmpEnable` / `OnCmpDisable` 负责禁用与恢复 `CameraController.DisableUserCameraControl`（:44-72）。
+> - **按键与模态**：`KScreenManager.OnKeyDown`（`KScreenManager.cs:179-199`）自栈顶向下派发直到 `e.Consumed`；`KModalScreen.OnKeyDown`（`KModalScreen.cs:123-139`）消费 `Action.Escape` / 右键 → `Deactivate()` ⇒ **Esc 关闭与"必须先关掉才能做别的操作"都是原版机制**，本 Mod 不自己处理按键。`KScreenManager.Update()`（:161-176）遇到 `IsModal()` 的屏后停止向更下层传播 `ScreenUpdate`。
+> - ⚠️ **`KModalScreen.pause` 默认 `true`**（`KModalScreen.cs:152`）：打开会 `SpeedControlScreen.Pause(false, false)`、关闭会 `Unpause(false)`——**会改掉玩家自己按下的暂停状态，与 §二.2 时间中立铁律冲突 ⇒ 本 Mod 显式 `pause = false`**。
+> - ⚠️ **`Action` 名称冲突**：缺氧自带全局枚举 `Action`（`Action.Escape` / `Action.NumActions`），**命名空间成员优先于 `using System;` 导入**，故本 Mod 必须写 `System.Action`（原版源码通篇写 `System.Action(...)` 即此原因）。
 
 ### 3.2 关键事件/句柄速查
 
@@ -112,8 +122,12 @@
 
 ### M1 · 实体配置弹窗框架层（UI）★ 本 Mod 门面
 职责：把"点中实体 → 一个按钮 → 弹窗改配置"这条链搭起来，供所有操作模块复用。
-- **用户菜单按钮注入**：对选中实体（`SelectTool.Instance.selected`）在 `RefreshUserMenu` 时机加"修改配置"按钮；不改任何预制体、不改选择流程
-- **模态弹窗**（自建）：`KModalScreen` 子类，克隆 `ScreenPrefabs.Instance.ConfirmDialogScreen` 预制体做壳，自建内容区（标题 + 参数行列表 + 底部按钮）
+- **用户菜单按钮注入**：对选中实体在 `RefreshUserMenu` 时机加"修改配置"按钮；不改任何预制体、不改选择流程
+  - **落地（批 2a 已实现）**：`Patches/UserMenu_AppendToScreen_Patch.cs` 在 `UserMenu.AppendToScreen` 的 **Prefix** 里判定目标并调 `DpConfigButton.EnsureOn(go)`；`UI/DpConfigButton.cs` 是**挂在实体身上的 `KMonoBehaviour`**，用 `Subscribe<DpConfigButton>(493375141, 静态 IntraObjectHandler)`（照 `Clearable.cs:17/222` 原版写法）→ `Game.Instance.userMenu.AddButton(gameObject, new ButtonInfo(...), 20f)`。组件**不做任何序列化**，读档后由 A1 重新挂上，**不影响存档**；订阅由 `subscribed` 标志保证只做一次（防框架回调与直接调用重复）
+- **模态弹窗**（**自建，不克隆预制体**——依据见 §3.1 框架事实块）
+  - **落地（批 2a 已实现）**：`UI/DpConfigPanel.cs : KModalScreen`；`new GameObject` + `AddComponent`（Awake → `OnPrefabInit` 生成遮罩与内容区）→ `KScreenManager.AddExistingChild(GameScreenManager.Instance.ssOverlayCanvas, go)` → `Activate()`
+  - 内容区自建：标题 / 目标名 / 参数行位 / 关闭按钮；布局遵守 oni-ui 规则（根 VLG → 行 HLG 一层嵌套、`childForceExpandHeight = false`、TMP 显式赋 `Localization.FontAsset`、纯代码用 `Button` 且 `transition = None`、装饰层 `raycastTarget = false`）
+  - **时间中立**：`pause = false`（原版默认 `true` 会改掉玩家自己按下的暂停）；关闭走 `Deactivate()`（原版会销毁实例，故"全局仅一个"实现为"已有实例就不再叠第二个"）
 - **参数行工厂**：克隆原版控件预制体——滑杆/数字输入（对应原版 `SliderValue` 的 `KSlider` + `KNumberInputField`）、勾选（`MultiToggle`）、下拉（原版选择器行）；每行声明"取值/写值/范围/单位"
 - **实体能力模板注册表**：`实体特征 → 参数行定义列表`（选中实体后按特征匹配，生成对应行；无匹配则不显示按钮或提示"该实体无可调参数"）
 - 扩展槽：自研参数行类型（如"元素选择 + 温度 + 病菌"复合行）、二级面板（后续创造建筑套件用）

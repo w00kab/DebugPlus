@@ -74,7 +74,8 @@
 | SandboxTools 参考资料 | `F:\ONI_ModDev\ONI_ModCode\【参考代码】sandTool`（原文路径 `【参考代码】ONIMods…` 在本机**不存在**） |
 | 顶栏对照（不采用其领域） | `[参考代码] DebugButton` |
 | 用户菜单按钮 / 模态弹窗范式参考 | `F:\ONI_ModDev\ONI_ModCode\Applied Logistics Network`（`ALN_MaterialRequester.SetCraftingControl` 的 `RefreshUserMenu` 模式） |
-| 游戏 API 解包源码（只读，禁分发） | `F:\ONI_ModDev\ONI_ModCode\缺氧本体代码\Assembly-CSharp` |
+| 游戏 API 解包源码（只读，禁分发） | `F:\ONI_ModDev\ONI_ModCode\缺氧本体代码\Assembly-CSharp`（游戏本体逻辑） |
+| 游戏框架程序集源码（只读，禁分发） | `F:\ONI_ModDev\ONI_ModCode\缺氧本体代码\Assembly-CSharp-firstpass`（**2026-09-13 由用户反编译**：`KScreen` / `KMonoBehaviour` / `KScreenManager` / `GameScreenManager` / `Util` / `KSlider` 等 Klei UI 框架类型全在这里，UI 施工**必须先查这里**，勿凭记忆写） |
 | 游戏程序集真源（编译引用） | `F:\...\OxygenNotIncluded_Data\Managed\` |
 
 > 教训（P1）：反编译产物可能含迭代器状态机残留（如 `PPatchTools.<DoReplaceMethodCalls>d__11`）
@@ -109,3 +110,11 @@
   工程内现有源文件仅 `DebugPlusMod.cs` / `STRINGS.cs` / `Properties\AssemblyInfo.cs` 三个。
 - 新 P1 剩余内容：打通"用户菜单按钮 → 模态弹窗 → 参数行"最小链，并落地**植物生长进度**
   （暂停下拉动即生效）；首个真实补丁落在 `Patches/`（命名 `Xxx_目标_Patch`）
+- ✅ **批 2a（M1 最小链外壳）已实现并编译部署**（2026-09-13，待用户实机验证）：
+  `Patches/UserMenu_AppendToScreen_Patch.cs`（Prefix 注入）、`UI/DpConfigButton.cs`（实体身上的用户菜单按钮）、
+  `UI/DpConfigPanel.cs`（自建 `KModalScreen` 弹窗）、`STRINGS.cs` + `DebugPlusMod.cs`（本 Mod 自己的
+  LocString 注册）。**关键结论已沉淀进 plan.md §3.1 的"自建模态屏的框架依据"块**
+  （`KScreen.Activate()` 自足、`KMonoBehaviour` 运行时 `AddComponent` 即初始化、`Deactivate()` 会销毁实例、
+  `pause` 默认 `true` 必须显式关掉、全局 `Action` 枚举会遮蔽 `System.Action`）。
+- ⏳ **批 2b（参数行 + 植物生长进度）尚未批准**；本地 git 仓库已初始化并提交批 1 后的干净基线
+  （`4aaf9e4`，分支 `main`），**远程未推送**。

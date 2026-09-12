@@ -11,13 +11,16 @@ namespace DebugPlus
     /// 随后打印加载日志。
     /// 说明：本 Mod 零第三方依赖、零上游代码——不使用任何第三方框架库，因此不需要额外的
     /// 初始化链（没有框架引导、没有补丁管理器注册、没有版本检查）。
-    /// 游戏内文本（LocString）在需要时由对应模块自行向 Localization 注册（M5）。
+    /// 游戏内文本（LocString）由本 Mod 自己的 STRINGS 树提供，在此向 Localization 注册
+    /// （Localization.RegisterForTranslation 按命名空间收集 LocString 树根并生成键，
+    /// 注册的是本 Mod 的命名空间，不触碰游戏自身的字符串）。
     /// </summary>
     public class DebugPlusMod : UserMod2
     {
         public override void OnLoad(Harmony harmony)
         {
             base.OnLoad(harmony);
+            Localization.RegisterForTranslation(typeof(STRINGS));
             Debug.Log("[DebugPlus] DebugPlus · 调试增强 已加载");
         }
     }
