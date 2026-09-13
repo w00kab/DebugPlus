@@ -251,6 +251,19 @@ namespace DebugPlus.UI.Component
             return tmp;
         }
 
+        /// <summary>
+        /// 建一段**居中、不接射线、铺满父节点**的 TMP 文本（标题/说明/按钮文字这类装饰文本的常用形）。
+        /// 与 <see cref="CreateText"/> 的区别只有"铺满 + 居中"这一层锚点处理。
+        /// </summary>
+        public static TextMeshProUGUI CreateCenteredText(Transform parent, string name, string text,
+            float fontSize, Color color, bool wrapping = true)
+        {
+            var tmp = CreateText(parent, name, text, fontSize, color,
+                TextAlignmentOptions.Center, wrapping);
+            Stretch(tmp.gameObject); // 由锚点铺满父节点（不在布局组里时也能正确定位）
+            return tmp;
+        }
+
         // ══════════════════ 按钮 ══════════════════
 
         /// <summary>
@@ -262,9 +275,30 @@ namespace DebugPlus.UI.Component
         /// </summary>
         public static Button CreateButton(Transform parent, string name, string label,
             System.Action onClick, float fontSize = 15f,
-            Color? background = null, Color? labelColor = null)
+            Color? background = null, Color? labelColor = null,
+            float width = 0f, float height = 0f, float flexibleWidth = 0f)
         {
             GameObject go = NewUIObject(name, parent);
+            if (width > 0f || height > 0f)
+            {
+                // 固定尺寸（preferred 与 min 同值）：不给布局组"算出来是 0"的机会
+                var layout = GetOrAddLayout(go);
+                if (width > 0f)
+                {
+                    layout.preferredWidth = width;
+                    layout.minWidth = width;
+                }
+                if (height > 0f)
+                {
+                    layout.preferredHeight = height;
+                    layout.minHeight = height;
+                }
+            }
+            if (flexibleWidth > 0f)
+            {
+                GetOrAddLayout(go).flexibleWidth = flexibleWidth;
+            }
+
             var image = go.AddComponent<Image>();
             image.color = background ?? UIColors.Background;
             image.raycastTarget = true; // 可交互元素必须不透明 + 接射线

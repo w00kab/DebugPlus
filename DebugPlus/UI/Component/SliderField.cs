@@ -266,29 +266,17 @@ namespace DebugPlus.UI.Component
 
         private static GameObject NewUIObject(string name, Transform parent)
         {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.AddComponent<RectTransform>(); // 本文件后续一律 GetComponent 取（约束 ②）
-            return go;
+            return UIFactory.NewUIObject(name, parent); // 统一走构件工厂（约束 ② 只在这里落实一次）
         }
 
         private static RectTransform Stretch(GameObject go)
         {
-            var rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            return rect;
+            return UIFactory.Stretch(go); // 统一走构件工厂
         }
 
         private static void StretchWithInset(GameObject go, float horizontal, float vertical)
         {
-            var rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(horizontal, vertical);
-            rect.offsetMax = new Vector2(-horizontal, -vertical);
+            UIFactory.StretchWithInset(go, horizontal, vertical); // 统一走构件工厂
         }
     }
 }

@@ -76,11 +76,8 @@ namespace DebugPlus.UI.View
                 return;
             }
 
-            var go = new GameObject("ConfigPanel");
-            // 规则：新建 GameObject 先加 RectTransform，再加其它 UI 组件（LayoutElement 等会因
-            // [RequireComponent] 自动补一个，重复添加会 NRE）。
-            var rootRect = go.AddComponent<RectTransform>();
-            Stretch(rootRect);
+            var go = UIFactory.NewUIObject("ConfigPanel", null);
+            UIFactory.Stretch(go); // 铺满遮罩（KModalScreen 的遮罩是它的父级）
 
             // Awake → InitializeComponent → OnPrefabInit：遮罩与内容区在此生成。
             var panel = go.AddComponent<ConfigPanel>();
@@ -192,134 +189,58 @@ namespace DebugPlus.UI.View
 
         /// <summary>
         /// 自建内容区：窗口（不透明底）→ 垂直布局 → 标题 / 目标名 / 占位说明 / 按钮行。
-        /// 布局规则（oni-ui）：只用「根 VLG → 行 HLG」一层嵌套，禁止 VLG→VLG；
-        /// VLG 的 childForceExpandHeight = false；HLG 的 childForceExpandHeight = false。
+        /// 布局一律走 <see cref="UIFactory"/>（规则只在那一个文件里定义，此处不再手写布局组字段）。
         /// </summary>
         private void BuildWindow()
         {
-            windowRoot = new GameObject("window");
-            windowRoot.transform.SetParent(transform, false);
-            var rect = windowRoot.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0.5f);
-            rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(WindowWidth, ComputeHeight(0));
-            windowRect = rect;
+            windowRoot = UIFactory.NewUIObject("window", transform);
+            windowRect = UIFactory.AnchorCenter(windowRoot, WindowWidth, ComputeHeight(0));
+            UIFactory.AddBackground(windowRoot, UIColors.BackgroundD, true); // 不透明底：拦住面板区域的点击
 
-            var image = windowRoot.AddComponent<Image>();
-            image.color = UIColors.BackgroundD; // 不透明底（颜色走统一色板）
-            image.raycastTarget = true;                      // 拦住面板区域的点击
+            // 根 VLG：撑满宽度 + 子项顶部居中（唯一用 forceExpandWidth=true 的地方）
+            UIFactory.AddVLG(windowRoot,
+                forceExpandWidth: true,
+                alignment: TextAnchor.UpperCenter,
+                spacing: Spacing,
+                padding: new RectOffset(16, 16, 14, 14));
 
-            var vlg = windowRoot.AddComponent<VerticalLayoutGroup>();
-            vlg.padding = new RectOffset(16, 16, 14, 14);
-            vlg.spacing = Spacing;
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false; // ★ 不拉伸高度
-
-            CreateText(windowRoot, "title", STRINGS.UI.DEBUGPLUS.PANEL_TITLE, TitleHeight, 20f);
-            TextMeshProUGUI target = CreateText(windowRoot, "target", "", TextRowHeight, 16f);
-            targetText = target;
+            CreateCenteredRow(windowRoot, "title", STRINGS.UI.DEBUGPLUS.PANEL_TITLE, TitleHeight, 20f);
+            targetText = CreateCenteredRow(windowRoot, "target", "", TextRowHeight, 16f);
             // 参数行由 SetTarget → BuildParamRows 插在下面的按钮行之前；无参数行时这条提示才显示。
-            noteRow = CreateText(windowRoot, "note", STRINGS.UI.DEBUGPLUS.PANEL_NO_PARAMS, NoteRowHeight, 14f).gameObject;
+            noteRow = CreateCenteredRow(windowRoot, "note", STRINGS.UI.DEBUGPLUS.PANEL_NO_PARAMS,
+                NoteRowHeight, 14f).gameObject;
 
             CreateButtonRow(windowRoot);
         }
 
+        /// <summary>
+        /// 建一行居中文字（子节点按顺序插到根 VLG 末尾）。注意：按钮行是**后建的**，
+        /// 参数行由 <see cref="BuildParamRows"/> 在按钮行之前插入。
+        /// </summary>
+        private static TextMeshProUGUI CreateCenteredRow(GameObject parent, string name, string text,
+            float height, float fontSize)
+        {
+            TextMeshProUGUI tmp = UIFactory.CreateCenteredText(parent.transform, name, text,
+                fontSize, UIColors.PrimaryText);
+            UIFactory.AddPreferredHeight(tmp.gameObject, height);
+            return tmp;
+        }
+
         private void CreateButtonRow(GameObject window)
         {
-            buttonRow = new GameObject("buttonRow");
-            buttonRow.transform.SetParent(window.transform, false);
-            buttonRow.AddComponent<RectTransform>();
-            buttonRow.AddComponent<LayoutElement>().preferredHeight = ButtonRowHeight;
+            buttonRow = UIFactory.NewUIObject("buttonRow", window.transform);
+            UIFactory.AddPreferredHeight(buttonRow, ButtonRowHeight);
+            // 行 HLG：子项居中、不拉伸（forceExpand* 全 false 是默认值，故无需写出）
+            UIFactory.AddHLG(buttonRow, alignment: TextAnchor.MiddleCenter, spacing: Spacing);
 
-            var hlg = buttonRow.AddComponent<HorizontalLayoutGroup>();
-            hlg.spacing = Spacing;
-            hlg.childAlignment = TextAnchor.MiddleCenter;
-            hlg.childControlWidth = true;
-            hlg.childControlHeight = true;
-            hlg.childForceExpandWidth = false;  // ★ VLG 子项为 HLG 时必须 false
-            hlg.childForceExpandHeight = false; // ★ 规则：HLG 不作为 VLG 子项时也不拉伸高度
-
-            CreateButton(buttonRow, STRINGS.UI.DEBUGPLUS.PANEL_CLOSE, Close);
-        }
-
-        private void CreateButton(GameObject parent, string label, System.Action onClick)
-        {
-            var go = new GameObject("button");
-            go.transform.SetParent(parent.transform, false);
-            go.AddComponent<RectTransform>();
-            var layout = go.AddComponent<LayoutElement>();
-            layout.preferredWidth = ButtonWidth;
-            layout.minWidth = ButtonWidth;
-            layout.preferredHeight = ButtonHeight;
-            layout.minHeight = ButtonHeight;
-
-            var image = go.AddComponent<Image>();
-            image.color = UIColors.Background; // 可点击元素底色必须不透明
-            image.raycastTarget = true;
-
-            // 纯代码场景用 Button（KButton 的 soundPlayer 是 [SerializeField]，纯代码会 NRE）；
-            // transition = None：只用 onClick，避免 ColorTint 相乘导致颜色变深残留。
-            var button = go.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(delegate
-            {
-                onClick();
-            });
-
-            CreateText(go, "label", label, 0f, 16f, false, UIColors.RegularText);
-        }
-
-        /// <summary>创建一行文字（TMP 独占一个 GameObject：TMP 与 Image 同 GO 会冲突）。</summary>
-        private static TextMeshProUGUI CreateText(GameObject parent, string name, string text, float height, float fontSize)
-        {
-            return CreateText(parent, name, text, height, fontSize, true, UIColors.PrimaryText);
-        }
-
-        private static TextMeshProUGUI CreateText(GameObject parent, string name, string text, float height,
-            float fontSize, bool useLayout, Color color)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent.transform, false);
-            var rect = go.AddComponent<RectTransform>();
-            if (useLayout)
-            {
-                go.AddComponent<LayoutElement>().preferredHeight = height;
-            }
-            else
-            {
-                Stretch(rect); // 按钮内的文字铺满按钮，由锚点控制尺寸
-            }
-
-            var tmp = go.AddComponent<TextMeshProUGUI>();
-            if (Localization.FontAsset != null)
-            {
-                tmp.font = Localization.FontAsset; // 中文字形必须显式指定字体资源
-            }
-            tmp.text = text;
-            tmp.fontSize = fontSize;
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.color = color;
-            tmp.raycastTarget = false; // 装饰层不拦射线
-            return tmp;
+            UIFactory.CreateButton(buttonRow.transform, "button", STRINGS.UI.DEBUGPLUS.PANEL_CLOSE,
+                Close, 16f, UIColors.Background, UIColors.RegularText,
+                width: ButtonWidth, height: ButtonHeight);
         }
 
         private void Close()
         {
             Deactivate(); // KScreen.Deactivate：OnDeactivate → PopScreen → Destroy(gameObject)
-        }
-
-        private static void Stretch(RectTransform rect)
-        {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
         }
     }
 }
