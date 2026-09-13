@@ -5,46 +5,61 @@ using UnityEngine.UI;
 namespace DebugPlus.UI.Component
 {
     /// <summary>
-    /// 「滑条 + 读数」一栏（批 2b · A4 重构后）：**只负责 UI**，不认识任何游戏类型。
+    /// 「滑条 + 读数」一栏：**只负责 UI**，不认识任何游戏类型。
     /// 术语：**滑条** = 整条可拖的控件；**滑块** = 上面那个被拖动的小方块。
     ///
-    /// 为什么纯代码搭、不克隆预制体 —— 原版所有滑条行都来自预制体：
-    /// MultiSliderSideScreen.cs:34 `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`，
-    /// 而 `sliderPrefab` 是屏预制体上的 `[SerializeField]` 引用，**mod 拿不到**；
-    /// 原版源码里也没有"代码自建滑条"的先例，所以这条只能按框架公开属性自己搭。
+    /// # 布局控制（2026-09-13 按用户要求重做）
+    /// **尺寸一律由布局组与 LayoutElement 决定，不用"固定像素 + 手动锚点"**：
+    /// ```
+    /// sliderField                       ← 栏（本组件根，供外层行 HLG 使用）
+    ///   LayoutElement: preferredHeight = 条高, flexibleWidth = 1   ← 宽度吃满行内剩余
+    ///   HorizontalLayoutGroup: childControlW/H = true, spacing = 间隙
+    ///   ├── bar                          LayoutElement: flexibleWidth = 1   ← 滑条占满左侧
+    ///   │     Slider 本体：StretchWithInset(0, 上下留白) —— 条高 = 栏高 − 2×留白
+    ///   │     ├── background             可交互外壳（不透明 + 接射线）
+    ///   │     ├── fillArea → fill        Slider 驱动填充条
+    ///   │     └── handleArea → handle    Slider 驱动滑块（水平滑区与填充同内缩）
+    ///   └── readout                      LayoutElement: preferredWidth = 读数宽  ← 固定一列
+    /// ```
+    /// 关键点：**读数是被布局组分配了一列宽度**，不是"用锚点压在滑条右端"——
+    /// 后者会和滑条本体抢同一段绝对坐标，观感上就是"滑条没占满剩余宽度"。
     ///
-    /// 素材来源（plan.md §3.1 "参数行素材来源的框架依据"）：
-    /// · 滑条用 **KSlider**（原版预制体里用的就是它；`handleRect` / `fillRect` 是 Slider 的**可写公开属性**）。
-    /// · **不用 KNumberInputField**：`KInputField.inputField` 是 `[SerializeField] private`、
-    ///   `field` 只读（KInputField.cs:10-16 / 105-106）⇒ 纯代码无法合法构造，读数改用 TMP 标签。
+    /// # 为什么纯代码搭、不克隆预制体
+    /// 原版所有滑条行都来自预制体：`MultiSliderSideScreen.cs:34`
+    /// `Util.KInstantiateUI(this.sliderPrefab.gameObject, …)`，而 `sliderPrefab` 是屏预制体上的
+    /// `[SerializeField]` 引用，**mod 拿不到**；原版源码里也没有"代码自建滑条"的先例。
+    /// 素材：滑条用 **KSlider**（`handleRect` / `fillRect` 是基类 `Slider` 的**可写公开属性**）。
     ///
-    /// 三条硬约束（踩过坑，勿删）：
-    /// ① ⚠️ `KSlider.Awake()` 第一句是 `base.handleRect.gameObject.GetComponent&lt;ToolTip&gt;()`（KSlider.cs:40）
-    ///    ⇒ handleRect 为空会 NRE。故**先把滑条 GameObject 置为不激活**，挂完 handleRect / fillRect 再激活。
-    /// ② ⚠️ 本文件的 UI GameObject 一律由 `NewUIObject` 建，它已挂好 RectTransform
-    ///    ⇒ 后续只能 `GetComponent&lt;RectTransform&gt;()` 取；再 `AddComponent` 一次会**返回 null**（不抛异常），
+    /// # 三条硬约束（踩过坑，勿删）
+    /// ① ⚠️ `KSlider.Awake()` 第一句取 `handleRect.gameObject`（KSlider.cs:40）⇒ handleRect 为空会 NRE。
+    ///    故**先把滑条 GameObject 置为不激活**，挂完 handleRect / fillRect 再激活。
+    /// ② ⚠️ 本文件的 UI GameObject 一律由 <see cref="UIFactory.NewUIObject"/> 建，它已挂好 RectTransform
+    ///    ⇒ 后续只能 `GetComponent<RectTransform>()` 取；再 `AddComponent` 一次会**返回 null**（不抛异常），
     ///    下一句给 null 设锚点才崩（2026-09-13 实机 NRE，IL 偏移 0x10A 定位）。
     /// ③ TMP 必须独占 GameObject 且显式赋 `Localization.FontAsset`（中文字形依赖它）。
     ///
-    /// 布局规则（oni-ui）：装饰层 `raycastTarget = false`、可交互层用不透明底"撑住"命中；
-    /// 本栏内部**不放 LayoutGroup**（子项靠锚点/尺寸定位），由外层 VLG 驱动它的高度。
+    /// 装饰层一律 `raycastTarget = false`；可交互层用不透明底"撑住"命中。
     /// </summary>
     public class SliderField : MonoBehaviour
     {
+        /// <summary>
+        /// 外观样式：**只放"控件内部的几何与颜色"**。
+        /// 栏宽由外层行布局分配，读数宽由本栏的布局组分配 —— 都不属于样式。
+        /// </summary>
         public class Style
         {
-            /// <summary>滑条（含槽）整体高度。</summary>
+            /// <summary>滑条本体高度（栏高 = 条高，故它同时是本栏的 preferredHeight）。</summary>
             public float Height = 26f;
-            /// <summary>滑块边长（宽度）。</summary>
+            /// <summary>滑块边长（宽度）；同时决定垂直滑区的内缩（= 半边），保证滑块是正方形。</summary>
             public float HandleSize = 18f;
-            /// <summary>填充条与滑区相对滑条的内缩（两者同值，填充与滑块两端才对得上）。</summary>
+            /// <summary>填充条与滑区相对滑条的水平内缩（两者同值，填充与滑块两端才对得上）。</summary>
             public float FillInset = 6f;
-            /// <summary>读数宽度。</summary>
+            /// <summary>滑条与读数两列之间的间隙（布局组 spacing）。</summary>
+            public float ColumnSpacing = 8f;
+            /// <summary>读数一列的宽度（由布局组分配）。</summary>
             public float ReadoutWidth = 56f;
             /// <summary>读数字号。</summary>
             public float ReadoutFontSize = 13f;
-            /// <summary>读数与滑条右端的间隙。</summary>
-            public float ReadoutGap = 6f;
             /// <summary>滑条槽底色。</summary>
             public Color TrackColor = UIColors.BackgroundDeep;
             /// <summary>填充条颜色。</summary>
@@ -58,7 +73,7 @@ namespace DebugPlus.UI.Component
         /// <summary>默认样式（想改观感就改这里：只影响"未显式传样式"的实例）。</summary>
         public static readonly Style DefaultStyle = new Style();
 
-        /// <summary>本实例的样式（可创建后直接改字段，或调用 <see cref="ApplyStyle"/> 批量重刷）。</summary>
+        /// <summary>本实例的样式。</summary>
         public Style CurrentStyle { get; private set; }
 
         private KSlider slider;
@@ -69,61 +84,60 @@ namespace DebugPlus.UI.Component
         /// <summary>用户拖动/点击产生新值时触发；<b>程序化设值不会触发</b>（避免把初值写回游戏）。</summary>
         public System.Action<float> onChanged;
 
-        /// <summary>建一整栏（自身 GO 已挂到 parent 下、已应用布局尺寸），返回组件。</summary>
+        /// <summary>
+        /// 建一整栏并挂到 <paramref name="parent"/> 下（行内使用）。
+        /// 栏高 = 条高（<see cref="Style.Height"/>）：外层行的 HLG 按这个首选高度排布，
+        /// 若行给的高度不同，滑条栏会被拉伸、条内部仍由自己的留白居中。
+        /// </summary>
         /// <param name="parent">父节点（通常是行 HLG）</param>
-        /// <param name="height">本栏在行内的高度（≤0 = 用样式里的高度）</param>
         /// <param name="style">自定义样式（null = 用 <see cref="DefaultStyle"/>）</param>
-        public static SliderField Create(Transform parent, float height = 0f, Style style = null)
+        public static SliderField Create(Transform parent, Style style = null)
         {
             Style current = style ?? DefaultStyle;
-            float fieldHeight = height > 0f ? height : current.Height;
 
-            GameObject root = NewUIObject("sliderField", parent);
-            var rootLayout = root.AddComponent<LayoutElement>();
-            // 宽度：显式压掉"首选宽度"（置 0），完全靠 flexibleWidth 吃掉行内剩余宽度。
-            // 不写 preferredWidth 时它取默认值 -1，布局分配全靠推算，容易出现"滑条没占满"的观感。
-            rootLayout.preferredWidth = 0f;
-            rootLayout.minWidth = 0f;
-            rootLayout.flexibleWidth = 1f;
-            rootLayout.preferredHeight = fieldHeight;
-            rootLayout.minHeight = fieldHeight;
+            // ── 栏（布局单元）：高度给布局组，宽度全交给父级行布局的弹性分配 ──
+            GameObject root = UIFactory.NewUIObject("sliderField", parent);
+            var rootLayout = UIFactory.GetOrAddLayout(root);
+            rootLayout.preferredHeight = current.Height;
+            rootLayout.minHeight = current.Height;
+            rootLayout.flexibleWidth = 1f; // 吃掉行内除固定列以外的全部剩余宽度
+            UIFactory.AddHLG(root, spacing: current.ColumnSpacing,
+                alignment: TextAnchor.MiddleLeft);
+
+            // ── 滑条（左列：吃掉剩余宽度） ──
+            GameObject barHolder = UIFactory.NewUIObject("bar", root.transform);
+            UIFactory.AddFlexibleWidth(barHolder);
 
             // 交互主体：不激活状态下把引用挂齐，最后一步再激活（约束 ①）。
-            GameObject sliderObject = NewUIObject("slider", root.transform);
+            GameObject sliderObject = UIFactory.NewUIObject("slider", barHolder.transform);
             sliderObject.SetActive(false);
+            // 上下各留半个滑块高：条在栏内垂直居中，且滑块是正方形而不是竖条
+            UIFactory.StretchWithInset(sliderObject, 0f, current.HandleSize * 0.5f);
 
             // 背景：可交互层的"命中外壳" —— 必须不透明且 raycastTarget = true，
             // 拖拽命中它之后事件沿层级冒泡到 Slider（透明/无 Graphic 都收不到点击）。
-            GameObject background = NewUIObject("background", sliderObject.transform);
-            Stretch(background);
-            var backgroundImage = background.AddComponent<Image>();
-            backgroundImage.color = current.TrackColor; // 颜色只从样式（默认源自 UIColors）取
-            backgroundImage.raycastTarget = true;
+            GameObject background = UIFactory.NewUIObject("background", sliderObject.transform);
+            UIFactory.Stretch(background);
+            var backgroundImage = UIFactory.AddBackground(background, current.TrackColor, true);
 
             // 填充区容器 + 填充条（Slider 驱动填充条的锚点，容器只提供矩形）
-            GameObject fillArea = NewUIObject("fillArea", sliderObject.transform);
-            StretchWithInset(fillArea, current.FillInset, current.FillInset);
-            GameObject fill = NewUIObject("fill", fillArea.transform);
-            var fillRect = Stretch(fill);
-            var fillImage = fill.AddComponent<Image>();
-            fillImage.color = current.FillColor;
-            fillImage.raycastTarget = false; // 装饰层不拦射线
+            GameObject fillArea = UIFactory.NewUIObject("fillArea", sliderObject.transform);
+            UIFactory.StretchWithInset(fillArea, current.FillInset, 0f);
+            GameObject fill = UIFactory.NewUIObject("fill", fillArea.transform);
+            var fillRect = UIFactory.Stretch(fill);
+            UIFactory.AddDecoration(fill, current.FillColor);
 
-            // 滑块滑区容器 + 滑块。
-            // 水平：与填充条同内缩（两端才对得上，滑块也不会越出滑条）；
-            // 垂直：也要内缩半个滑块高 —— 否则滑块被撑满整条高度、变成一根竖条（不是方块）。
-            GameObject handleArea = NewUIObject("handleArea", sliderObject.transform);
-            StretchWithInset(handleArea, current.FillInset, current.HandleSize * 0.5f);
-            GameObject handle = NewUIObject("handle", handleArea.transform);
+            // 滑块滑区容器 + 滑块（水平与填充同内缩；垂直已由外层的半个滑块高留白保证居中）
+            GameObject handleArea = UIFactory.NewUIObject("handleArea", sliderObject.transform);
+            UIFactory.StretchWithInset(handleArea, current.FillInset, 0f);
+            GameObject handle = UIFactory.NewUIObject("handle", handleArea.transform);
             var handleRect = handle.GetComponent<RectTransform>(); // 约束 ②
             handleRect.anchorMin = new Vector2(0f, 0f);
             handleRect.anchorMax = new Vector2(0f, 1f);
             handleRect.pivot = new Vector2(0.5f, 0.5f);
             handleRect.anchoredPosition = Vector2.zero;
-            handleRect.sizeDelta = new Vector2(current.HandleSize, 0f); // 高度随之等于滑块边长（正方形）
-            var handleImage = handle.AddComponent<Image>();
-            handleImage.color = current.HandleColor;
-            handleImage.raycastTarget = false;
+            handleRect.sizeDelta = new Vector2(current.HandleSize, 0f); // 高度 = 滑区高（= 滑块边长）
+            UIFactory.AddDecoration(handle, current.HandleColor);
 
             // 最后挂 KSlider：此时引用已就位，激活后的 Awake 不会 NRE。
             var field = root.AddComponent<SliderField>();
@@ -137,21 +151,17 @@ namespace DebugPlus.UI.Component
             // ⚠️ 监听器**不在这里挂**：设初值时若已挂上，会把从游戏读出来的现状当用户操作写回去。
             //    普通用法走 Bind()（内部保证顺序）；高级用法自己按 SetRange → SetFormatter → AttachListener 排。
 
-            // 读数：与滑条同一栏、右对齐；TMP 独占一个 GameObject（约束 ③）。
+            // ── 读数（右列：布局组分给它固定一列宽度） ──
             field.readout = CreateReadout(root.transform, current);
 
             sliderObject.SetActive(true);
-
-            // 诊断日志：把三个关键几何量打出来（宽度异常时一眼能定位是行窄了、还是滑条没吃掉剩余宽度）
-            Debug.Log("[DebugPlus] 滑条已建：栏宽=" + root.GetComponent<RectTransform>().rect.width.ToString("0.#")
-                + " 滑条宽=" + sliderObject.GetComponent<RectTransform>().rect.width.ToString("0.#")
-                + " 高=" + current.Height.ToString("0.#"));
             return field;
         }
 
         /// <summary>
-        /// 用改过的样式重刷外观（尺寸与颜色）。
-        /// 一般不需要调用：创建时传样式、或直接改 <see cref="CurrentStyle"/> 的字段即可。
+        /// 用改过的样式重刷外观。
+        /// ⚠️ 尺寸类改动（条高/滑块/读数宽）在**创建时**已交给布局组，改样式后请重建本栏；
+        /// 本方法只重刷读数文本。
         /// </summary>
         public void ApplyStyle()
         {
@@ -165,7 +175,7 @@ namespace DebugPlus.UI.Component
         /// 顺序为什么重要：先 <see cref="SetRange"/>（含初值）→ 再 <see cref="SetFormatter"/> →
         /// **最后**才挂监听。若顺序颠倒，"从游戏读出来的现状"会被当成一次用户操作写回游戏。
         /// </summary>
-        /// <param name="read">读当前值（本 Mod 的读值门槛、换算都由它负责）</param>
+        /// <param name="read">读当前值</param>
         /// <param name="write">写回值（拖动/点击时调用；<b>写的是 UI 刻度上的值</b>）</param>
         /// <param name="format">读数文本格式化（null = 用默认"保留一位小数"）</param>
         /// <param name="min">最小值</param>
@@ -250,44 +260,13 @@ namespace DebugPlus.UI.Component
             }
         }
 
+        /// <summary>读数一列：宽度由布局组分配（LayoutElement.preferredWidth），不设锚点尺寸。</summary>
         private static TextMeshProUGUI CreateReadout(Transform parent, Style style)
         {
-            GameObject go = NewUIObject("readout", parent);
-            // ⚠️ 本栏内部没有 LayoutGroup，读数的 LayoutElement 是**无效**的
-            //    ⇒ 必须用锚点自己定位：右对齐、占满高度、与滑条右端留一点间隙。
-            var rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 0f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 0.5f);
-            rect.anchoredPosition = new Vector2(-style.ReadoutGap, 0f);
-            rect.sizeDelta = new Vector2(style.ReadoutWidth, 0f);
-
-            var tmp = go.AddComponent<TextMeshProUGUI>();
-            if (Localization.FontAsset != null)
-            {
-                tmp.font = Localization.FontAsset; // 约束 ③
-            }
-            tmp.text = "";
-            tmp.fontSize = style.ReadoutFontSize;
-            tmp.alignment = TextAlignmentOptions.MidlineRight;
-            tmp.color = style.ReadoutColor;
-            tmp.raycastTarget = false; // 装饰层不拦射线
+            TextMeshProUGUI tmp = UIFactory.CreateText(parent, "readout", string.Empty,
+                style.ReadoutFontSize, style.ReadoutColor, TextAlignmentOptions.MidlineRight, false);
+            UIFactory.AddFixedSize(tmp.gameObject, style.ReadoutWidth, style.Height);
             return tmp;
-        }
-
-        private static GameObject NewUIObject(string name, Transform parent)
-        {
-            return UIFactory.NewUIObject(name, parent); // 统一走构件工厂（约束 ② 只在这里落实一次）
-        }
-
-        private static RectTransform Stretch(GameObject go)
-        {
-            return UIFactory.Stretch(go); // 统一走构件工厂
-        }
-
-        private static void StretchWithInset(GameObject go, float horizontal, float vertical)
-        {
-            UIFactory.StretchWithInset(go, horizontal, vertical); // 统一走构件工厂
         }
     }
 }

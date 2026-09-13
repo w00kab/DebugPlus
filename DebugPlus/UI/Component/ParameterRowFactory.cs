@@ -38,7 +38,7 @@ namespace DebugPlus.UI.Component
             UIFactory.AddHLG(row, alignment: TextAnchor.MiddleLeft, spacing: RowSpacing);
 
             TextMeshProUGUI label = CreateLabel(row, parameter.Label);
-            SliderField sliderField = SliderField.Create(row.transform, RowHeight);
+            SliderField sliderField = SliderField.Create(row.transform); // 高度由栏自身 LayoutElement 交给行布局
 
             var rowComponent = row.AddComponent<ParameterRow>();
             rowComponent.Bind(parameter, sliderField, label);

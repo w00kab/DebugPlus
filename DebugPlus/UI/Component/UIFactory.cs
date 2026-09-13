@@ -195,10 +195,15 @@ namespace DebugPlus.UI.Component
             return layout;
         }
 
-        /// <summary>吃掉行内剩余宽度（行 HLG 的 `childForceExpandWidth = false` 时仍然生效）。</summary>
+        /// <summary>
+        /// 标记为"吃掉剩余空间的弹性列"：`flexibleWidth > 0` 且**首选宽度置 0**
+        /// —— 后者很重要，否则布局分配时它会按默认首选宽度抢空间，观感就是"没占满/被挤窄"。
+        /// </summary>
         public static LayoutElement AddFlexibleWidth(GameObject go, float weight = 1f)
         {
             var layout = GetOrAddLayout(go);
+            layout.preferredWidth = 0f;
+            layout.minWidth = 0f;
             layout.flexibleWidth = weight;
             return layout;
         }
