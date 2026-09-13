@@ -94,6 +94,17 @@ namespace DebugPlus.UI.Component
             get { return editingCount > 0; }
         }
 
+        /// <summary>
+        /// 正在编辑的输入框**个数**（正常只可能是 0 或 1）。
+        /// 单独暴露它而不只给 <see cref="IsEditing"/>，是因为计数**会漏**：组件销毁时机不由本类控制，
+        /// 漏一次就永久卡在"编辑中"（整个游戏的键盘失灵），而 `IsEditing` 只能看出"卡了"、
+        /// 看不出"卡在几" —— 面板的临时自检区把这个数直接显示出来，肉眼即可判断是否泄漏。
+        /// </summary>
+        public static int EditingCount
+        {
+            get { return editingCount; }
+        }
+
         /// <summary>本实例的样式。</summary>
         public Style CurrentStyle { get; private set; }
 

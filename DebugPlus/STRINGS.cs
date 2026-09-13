@@ -28,6 +28,17 @@ namespace DebugPlus
                 // 参数行文案（批 2b · A7b）
                 public static LocString PARAM_GROWTH = "生长进度";
                 public static LocString UNIT_PERCENT = "%";
+
+                // 控件自检区文案（批 3-2 临时挂载用；批 3-3 类型分派挂上后随代码整块删除）
+                public static LocString PANEL_SELFTEST_TITLE = "— 控件自检（临时 · 批 3-3 挂载后删）—";
+                public static LocString PANEL_SELFTEST_NUMBER = "数值框";
+                public static LocString PANEL_SELFTEST_TEXT = "输入框";
+                public static LocString PANEL_SELFTEST_TOGGLE = "勾选";
+                public static LocString PANEL_SELFTEST_TEXT_INITIAL = "点我输入中文abc";
+                // {0}=是否编辑中 {1}=编辑计数 {2}=数值框回读
+                public static LocString PANEL_SELFTEST_STATUS = "编辑中：{0} ｜ 计数 {1} ｜ 数值 {2}";
+                public static LocString PANEL_SELFTEST_YES = "是";
+                public static LocString PANEL_SELFTEST_NO = "否";
             }
         }
     }

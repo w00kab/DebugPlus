@@ -25,8 +25,14 @@ namespace DebugPlus.UI.Component
         /// <summary>行高（ConfigPanel 按它算窗口高度）；滑条高度由 <see cref="SliderField.Style"/> 决定，须容得下。</summary>
         public const float RowHeight = 36f;
 
-        private const float LabelWidth = 120f;
-        private const float LabelFontSize = 15f;
+        /// <summary>
+        /// 行标签一列的固定宽度。
+        /// `public`：ConfigPanel 的**临时自检行**按同一套标签尺寸排（那边是过渡代码，不想为它复制常量）。
+        /// </summary>
+        public const float LabelWidth = 120f;
+
+        /// <summary>行标签字号（同上，供自检行复用同一套尺寸口径）。</summary>
+        public const float LabelFontSize = 15f;
         private const float RowSpacing = 8f;
 
         /// <summary>建一行参数并绑定（行已挂到 parent 下、排在末尾），返回行组件。</summary>
