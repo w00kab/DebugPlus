@@ -22,8 +22,8 @@ namespace DebugPlus.UI.Component
     /// </summary>
     public static class ParameterRowFactory
     {
-        /// <summary>行高（ConfigPanel 按它算窗口高度）；必须容得下 SliderField 的滑条高度。</summary>
-        public const float RowHeight = 56f;
+        /// <summary>行高（ConfigPanel 按它算窗口高度）；滑条高度由 <see cref="SliderField.Style"/> 决定，须容得下。</summary>
+        public const float RowHeight = 36f;
 
         private const float LabelWidth = 120f;
         private const float LabelFontSize = 15f;

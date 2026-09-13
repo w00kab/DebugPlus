@@ -34,17 +34,17 @@ namespace DebugPlus.UI.Component
         public class Style
         {
             /// <summary>滑条（含槽）整体高度。</summary>
-            public float Height = 44f;
+            public float Height = 26f;
             /// <summary>滑块边长（宽度）。</summary>
-            public float HandleSize = 28f;
-            /// <summary>填充条相对滑条的内缩。</summary>
+            public float HandleSize = 18f;
+            /// <summary>填充条与滑区相对滑条的内缩（两者同值，填充与滑块两端才对得上）。</summary>
             public float FillInset = 6f;
             /// <summary>读数宽度。</summary>
             public float ReadoutWidth = 56f;
             /// <summary>读数字号。</summary>
-            public float ReadoutFontSize = 15f;
+            public float ReadoutFontSize = 13f;
             /// <summary>读数与滑条右端的间隙。</summary>
-            public float ReadoutGap = 2f;
+            public float ReadoutGap = 6f;
             /// <summary>滑条槽底色。</summary>
             public Color TrackColor = UIColors.BackgroundDeep;
             /// <summary>填充条颜色。</summary>
@@ -80,7 +80,11 @@ namespace DebugPlus.UI.Component
 
             GameObject root = NewUIObject("sliderField", parent);
             var rootLayout = root.AddComponent<LayoutElement>();
-            rootLayout.flexibleWidth = 1f; // 吃掉行内剩余宽度（行 HLG 的 childForceExpandWidth = false 时仍生效）
+            // 宽度：显式压掉"首选宽度"（置 0），完全靠 flexibleWidth 吃掉行内剩余宽度。
+            // 不写 preferredWidth 时它取默认值 -1，布局分配全靠推算，容易出现"滑条没占满"的观感。
+            rootLayout.preferredWidth = 0f;
+            rootLayout.minWidth = 0f;
+            rootLayout.flexibleWidth = 1f;
             rootLayout.preferredHeight = fieldHeight;
             rootLayout.minHeight = fieldHeight;
 
@@ -105,16 +109,18 @@ namespace DebugPlus.UI.Component
             fillImage.color = current.FillColor;
             fillImage.raycastTarget = false; // 装饰层不拦射线
 
-            // 滑块滑区容器 + 滑块（左右各留半个滑块宽，滑块才不会越界）
+            // 滑块滑区容器 + 滑块。
+            // 水平：与填充条同内缩（两端才对得上，滑块也不会越出滑条）；
+            // 垂直：也要内缩半个滑块高 —— 否则滑块被撑满整条高度、变成一根竖条（不是方块）。
             GameObject handleArea = NewUIObject("handleArea", sliderObject.transform);
-            StretchWithInset(handleArea, current.HandleSize * 0.5f, current.HandleSize * 0.5f);
+            StretchWithInset(handleArea, current.FillInset, current.HandleSize * 0.5f);
             GameObject handle = NewUIObject("handle", handleArea.transform);
             var handleRect = handle.GetComponent<RectTransform>(); // 约束 ②
             handleRect.anchorMin = new Vector2(0f, 0f);
             handleRect.anchorMax = new Vector2(0f, 1f);
             handleRect.pivot = new Vector2(0.5f, 0.5f);
             handleRect.anchoredPosition = Vector2.zero;
-            handleRect.sizeDelta = new Vector2(current.HandleSize, 0f); // 高度撑满滑区
+            handleRect.sizeDelta = new Vector2(current.HandleSize, 0f); // 高度随之等于滑块边长（正方形）
             var handleImage = handle.AddComponent<Image>();
             handleImage.color = current.HandleColor;
             handleImage.raycastTarget = false;
@@ -135,6 +141,11 @@ namespace DebugPlus.UI.Component
             field.readout = CreateReadout(root.transform, current);
 
             sliderObject.SetActive(true);
+
+            // 诊断日志：把三个关键几何量打出来（宽度异常时一眼能定位是行窄了、还是滑条没吃掉剩余宽度）
+            Debug.Log("[DebugPlus] 滑条已建：栏宽=" + root.GetComponent<RectTransform>().rect.width.ToString("0.#")
+                + " 滑条宽=" + sliderObject.GetComponent<RectTransform>().rect.width.ToString("0.#")
+                + " 高=" + current.Height.ToString("0.#"));
             return field;
         }
 
