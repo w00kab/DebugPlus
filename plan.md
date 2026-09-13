@@ -76,7 +76,10 @@
 >   ⚠️ 但 `KSlider.Awake()`（`KSlider.cs:31-41`）第一句就是 `base.handleRect.gameObject.GetComponent<ToolTip>()` ⇒ **handleRect 为空会 NRE**，故必须先让滑条 GameObject **不激活**、挂完 `handleRect` / `fillRect` 再激活（Awake 在激活时才跑）。
 >   ⚠️ **`Slider.Set(float, bool)` 是 protected（IL `family`）**：mod 调不到（CS0122）⇒ 程序化设值只能用公开 `value` 属性，
 >   并把 `onValueChanged` 的挂载**推迟到设完初值之后**（`SliderField.AttachListener()`），否则初值会外泄成一次"用户操作"。
-> - **`KNumberInputField` 不能纯代码构造**：`KInputField.inputField` 是 `[SerializeField] private KInputTextField`，`field` 属性**只读**（`KInputField.cs:10-16 / 105-106`）⇒ 数值不使用数字输入框，改自建 TMP 读数标签。
+> - **`KNumberInputField` 不能纯代码构造**：`KInputField.inputField` 是 `[SerializeField] private KInputTextField`，`field` 属性**只读**（`KInputField.cs:10-16 / 105-106`）⇒ **不使用原版数字输入框**。
+>   ⚠️ 2026-09-13 澄清（批 3-2 方案批准时确认）：这句只说**不用原版 `KNumberInputField`**，
+>   **不排斥自建数值输入控件** —— 批 3-2 的 `UI/Component/NumberField.cs` 是自建（标签 + 步进 + 点击编辑），与本条不矛盾。
+>   同理 `UI/Component/TextField.cs` 自建 `TMP_InputField`（`TextArea → Text`），也不用原版 `KInputTextField`。
 > - **原版"滑条 + 数值 + 标签"的组装样板**：`SliderSet`（`SliderSet.cs:9-33` `SetupSlider`：滑条侧挂 `onReleaseHandle` / `onDrag` / `onMove` / `onPointerDown`，输入侧挂 `onEndEdit`；`:96-121` 统一 `SetValue` → `target.SetSliderValue`）。本 Mod 简化为"滑条 + 读数"，写值通道用 `Slider.onValueChanged`。
 > - **生长状态的原版取法**：`PlantBranchGrower.cs:402-403` = `GetComponent<IManageGrowingStates>()` 优先、`gameObject.GetSMI<IManageGrowingStates>()` 兜底；读 `PercentGrown()`（`Growing.cs:121-124` = `maturity.value / GetMax()`）、写 `OverrideMaturityLevel(percent)`（`Growing.cs:54-58` = `maturity.SetValue(GetMax() * percent)`）⇒ **写入口收的是 0–1 比例，不是 0–100**。
 
