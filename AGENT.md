@@ -60,11 +60,9 @@
   & "C:\Users\魏锴\.agents\skills\oni-mod-dev\scripts\build.ps1" -ProjectRoot "F:\ONI_ModDev\ONI_ModCode\Debug Plus"
   ```
   **禁止**：手写 `Copy-Item` / `robocopy` 拷贝 DLL、手动拼 `dotnet build` / `msbuild`、用任何"临时脚本"替代它。
-  这条命令**必须单独执行**：不要把 `build.ps1` 和别的命令（检查、grep、git）拼在同一次 pwsh 调用里 ——
-  那会让提权请求里混进无关操作，用户无法判断该批什么（2026-09-13 已被用户拒过一次）。
-  需要自验就**分开发起**独立的只读命令（`grep` / `Get-FileHash` / `git status`）。
-- 部署目标：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
-  （workspace 外 → 大概率触发沙箱拒绝 → 对**同一条 build.ps1 命令**申请一次提权重试；拒绝后不得改用拷贝绕过）
+  这条命令**必须单独执行**：不要把 `build.ps1` 和别的命令拼在同一次 pwsh 调用里
+- 🔴 **编译与部署必须提权**：`build.ps1` 必须以沙箱提权执行（部署目录在工作区外）。
+  提权是必须的，且提权请求里**只许有这一条命令**（不混检查/grep/git）；提权被拒 = 本次不部署，**绝不许改用拷贝 DLL 绕过**。
 - 日志：`%USERPROFILE%\AppData\LocalLow\Klei\Oxygen Not Included\player.log`（前缀 `[DebugPlus]`）
 - 远程仓库：`https://github.com/w00kab/DebugPlus`（`origin`，分支 `main`）。仓库根 = 工程根。
   ⚠️ 推送需认证 → 受限沙箱下 git 凭证管理器会失败（`sh.exe: couldn't create signal pipe`），
@@ -96,51 +94,16 @@
 
 ## 6. 会话工作流
 
-1) 读 plan.md + agent.md；2) 查 dsh 任务看板（认领纪律）；3) API 不明先读本体源码
-（`缺氧本体代码\Assembly-CSharp`），不凭空猜；4) 任何改动先按 §0 规则 2 列方案等批准；
-5) **判断铁律**：任何新功能先问"是否需要时间推进才成立"——需要则不做（时间中立）；
-6) 自验（编译/部署）；7) 中文汇报（做了什么 / 如何验证 / 风险 / 下一步），游戏内验证交用户。
+1) 读 plan.md + agent.md；
+2) API 不明先读本体源码
+（`缺氧本体代码\Assembly-CSharp`），不凭空猜；
+3) 任何改动先按 §0 规则 2 列方案等批准；
+4) **判断铁律**：任何新功能先问"是否需要时间推进才成立"——需要则不做（时间中立）；
+5) 自验（编译/部署）；
+6) 中文汇报（做了什么 / 如何验证 / 风险 / 下一步），游戏内验证交用户。
 
 ## 7. 未定事项（勿擅动）
 
-- ~~git 仓库是否建立~~：**已建立**（2026-09-13，`https://github.com/w00kab/DebugPlus`，Public，分支 `main`）；
-  `CHANGELOG.md` 是否建立**仍未决**（勿擅建）
 - 首版目标游戏版本/DLC 范围（❓2）；M3 生成物初始化补全的触发方式（生成时自动 / 点开时按需，❓1）
 - M4 创造建筑套件：屏蔽清单待盘点 + 用户勾选（❓4）
 - plan.md §七 的 4 条实机验证点（植物/间歇泉刷新、`SpawnAdult` 安全性、非建筑实体用户菜单）未验证前不得当成已定事实
-
-## 8. 当前阶段指针（进度以 NEXT_STEPS.md 为准）
-
-- P0 工程骨架：✅ 已游戏内加载验证（player.log 见 `[DebugPlus] … 已加载（P0 空骨架）`）
-- **2026 定位重定稿**：撤销"SandboxTools 基底"，改**零上游代码 + 暂停态操作**主线；
-  文档已同步（plan.md 重定稿 + 本文件）。
-- ✅ **去上游化清理已完成**（用户批准项 A：整体删除、不重写）：已删除
-  `Patches/SandboxToolsPatches.cs`、`UI/DestroyParameterMenu.cs`、`Tools/FilteredDestroyTool.cs`、
-  `Tools/DestroyFilter.cs`、`SandboxToolsStrings.cs` 共 5 个文件——逐块比对确认其全部内容
-  （分类清除工具、生成器额外分类、AETN 即时建造补铁）与被参考的上游原文一一对应，重写即重复其
-  能力（plan.md 二.1），故**不设替代文件**。同时 `DebugPlusMod.cs` 去掉上游字符串注册与 PLib 说明，
-  `NOTICE` / `LICENSE` / `Assets\README.md` 改写为独立自研口径（无上游声明段）。
-  工程内现有源文件仅 `DebugPlusMod.cs` / `STRINGS.cs` / `Properties\AssemblyInfo.cs` 三个。
-- 新 P1 剩余内容：打通"用户菜单按钮 → 模态弹窗 → 参数行"最小链，并落地**植物生长进度**
-  （暂停下拉动即生效）；首个真实补丁落在 `Patches/`（命名 `Xxx_目标_Patch`）
-- ✅ **批 2a（M1 最小链外壳）已实现并编译部署**（2026-09-13，待用户实机验证）：
-  `Patches/UserMenu_AppendToScreen_Patch.cs`（Prefix 注入）、`UI/Component/ConfigButton.cs`（实体身上的用户菜单按钮）、
-  `UI/View/ConfigPanel.cs`（自建 `KModalScreen` 弹窗）、`STRINGS.cs` + `DebugPlusMod.cs`（本 Mod 自己的
-  LocString 注册）。**关键结论已沉淀进 plan.md §3.1 的"自建模态屏的框架依据"块**
-  （`KScreen.Activate()` 自足、`KMonoBehaviour` 运行时 `AddComponent` 即初始化、`Deactivate()` 会销毁实例、
-  `pause` 默认 `true` 必须显式关掉、全局 `Action` 枚举会遮蔽 `System.Action`）。
-- ✅ **批 2b（参数行 + 植物生长进度）已实现并编译部署**（2026-09-13，待用户实机验证）：
-  `Operations/OperationRegistry.cs`（`IOperation` 登记表，判定与能力同源）、`Operations/GrowthOperation.cs`（`IManageGrowingStates`
-  读/写，**写入口收 0–1 比例**）、`Operations/Parameter.cs`（参数抽象）、`UI/Component/ParameterRowFactory.cs` + `UI/Component/ParameterRow.cs`
-  （**纯代码自建 `KSlider`**：原版滑条全来自拿不到的预制体引用；`KNumberInputField` 因
-  `inputField` 是 `[SerializeField] private` 而**不可**纯代码构造）、`UI/View/ConfigPanel.cs`（接参数行 + 动态高度）。
-  **关键结论已沉淀进 plan.md §3.1 的"参数行素材来源的框架依据"块**。
-- 本地 git 仓库：批 1 基线 `4aaf9e4` → README `ee138c3` → 文档同步 `9bf8108` → **批 2a `2a29d44`**（已提交）；
-  批 2b 的改动**已提交**（`cd09869`，含目录与命名整理），其崩溃修复为 `bdfce31`。
-  分支 `main`，**远程未推送**（本地领先 `origin/main` 4 个提交）。
-- 🔧 **批 2b 实机首跑即崩 → 已定位修复、02:44 重新部署（待复验）**：`ParameterRowFactory.CreateSlider` 里
-  滑块的 `RectTransform` 是 `null` ⇒ NRE。**根因**：`NewUIObject` 已挂过 `RectTransform`，再
-  `AddComponent<RectTransform>()` 时 **Unity 返回 `null` 而不抛异常**，下一句设锚点才崩。
-  修复：`handle.GetComponent<RectTransform>()`。**定位法（以后照做）**：`player.log` 的栈带 **IL 偏移**
-  （`[0x0010a]`）→ `ildasm` 反汇编**本 Mod 自己的** DLL（无需第三方反编译器，更不需反编译本体）→
-  在反汇编里搜该偏移即见 `ldloc.s handleRect` + `callvirt …set_anchorMin`。详见 NEXT_STEPS.md §3 教训 8/9。
