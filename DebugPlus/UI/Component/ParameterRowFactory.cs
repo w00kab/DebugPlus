@@ -70,7 +70,7 @@ namespace DebugPlus.UI.Component
             tmp.text = text;
             tmp.fontSize = LabelFontSize;
             tmp.alignment = TextAlignmentOptions.MidlineLeft;
-            tmp.color = Color.white;
+            tmp.color = UIColors.RegularText; // 颜色一律走 UIColors（唯一色板）
             tmp.raycastTarget = false; // 装饰层不拦射线
             return tmp;
         }

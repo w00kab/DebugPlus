@@ -258,7 +258,7 @@ namespace DebugPlus.UI.Component
         /// ⚠️ 用 `Button` 而**不用 `KButton`**：后者的 `soundPlayer` 是 `[SerializeField]`，
         /// 纯代码构造会在 Awake 里 NRE。
         /// ⚠️ `transition = None`：只用 onClick，避免 ColorTint 相乘导致颜色越点越深的残留观感。
-        /// 底色默认走 <see cref="UIColors.BackgroundControl"/>（不透明，否则收不到点击）。
+        /// 底色默认走 <see cref="UIColors.Background"/>（不透明，否则收不到点击）。
         /// </summary>
         public static Button CreateButton(Transform parent, string name, string label,
             System.Action onClick, float fontSize = 15f,
@@ -266,7 +266,7 @@ namespace DebugPlus.UI.Component
         {
             GameObject go = NewUIObject(name, parent);
             var image = go.AddComponent<Image>();
-            image.color = background ?? UIColors.BackgroundControl;
+            image.color = background ?? UIColors.Background;
             image.raycastTarget = true; // 可交互元素必须不透明 + 接射线
 
             var button = go.AddComponent<Button>();
@@ -278,7 +278,7 @@ namespace DebugPlus.UI.Component
             }
 
             var text = CreateText(go.transform, "label", label, fontSize,
-                labelColor ?? UIColors.TextOnDark, TextAlignmentOptions.Center, false);
+                labelColor ?? UIColors.RegularText, TextAlignmentOptions.Center, false);
             Stretch(text.gameObject);
             return button;
         }

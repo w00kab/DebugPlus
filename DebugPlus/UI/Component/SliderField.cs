@@ -31,11 +31,35 @@ namespace DebugPlus.UI.Component
     /// </summary>
     public class SliderField : MonoBehaviour
     {
-        private const float ReadoutWidth = 56f;
-        private const float ReadoutFontSize = 15f;
-        private const float SliderHeight = 44f;
-        private const float HandleWidth = 28f;
-        private const float FillInset = 6f;
+        public class Style
+        {
+            /// <summary>滑条（含槽）整体高度。</summary>
+            public float Height = 44f;
+            /// <summary>滑块边长（宽度）。</summary>
+            public float HandleSize = 28f;
+            /// <summary>填充条相对滑条的内缩。</summary>
+            public float FillInset = 6f;
+            /// <summary>读数宽度。</summary>
+            public float ReadoutWidth = 56f;
+            /// <summary>读数字号。</summary>
+            public float ReadoutFontSize = 15f;
+            /// <summary>读数与滑条右端的间隙。</summary>
+            public float ReadoutGap = 2f;
+            /// <summary>滑条槽底色。</summary>
+            public Color TrackColor = UIColors.BackgroundDeep;
+            /// <summary>填充条颜色。</summary>
+            public Color FillColor = UIColors.Success;
+            /// <summary>滑块颜色。</summary>
+            public Color HandleColor = UIColors.BackgroundB;
+            /// <summary>读数文字颜色。</summary>
+            public Color ReadoutColor = UIColors.PrimaryText;
+        }
+
+        /// <summary>默认样式（想改观感就改这里：只影响"未显式传样式"的实例）。</summary>
+        public static readonly Style DefaultStyle = new Style();
+
+        /// <summary>本实例的样式（可创建后直接改字段，或调用 <see cref="ApplyStyle"/> 批量重刷）。</summary>
+        public Style CurrentStyle { get; private set; }
 
         private KSlider slider;
         private TextMeshProUGUI readout;
@@ -45,14 +69,20 @@ namespace DebugPlus.UI.Component
         /// <summary>用户拖动/点击产生新值时触发；<b>程序化设值不会触发</b>（避免把初值写回游戏）。</summary>
         public System.Action<float> onChanged;
 
-        /// <summary>建一整栏（自身 GameObject 已挂到 parent 下、已应用布局尺寸），返回组件。</summary>
-        public static SliderField Create(Transform parent, float height)
+        /// <summary>建一整栏（自身 GO 已挂到 parent 下、已应用布局尺寸），返回组件。</summary>
+        /// <param name="parent">父节点（通常是行 HLG）</param>
+        /// <param name="height">本栏在行内的高度（≤0 = 用样式里的高度）</param>
+        /// <param name="style">自定义样式（null = 用 <see cref="DefaultStyle"/>）</param>
+        public static SliderField Create(Transform parent, float height = 0f, Style style = null)
         {
+            Style current = style ?? DefaultStyle;
+            float fieldHeight = height > 0f ? height : current.Height;
+
             GameObject root = NewUIObject("sliderField", parent);
             var rootLayout = root.AddComponent<LayoutElement>();
             rootLayout.flexibleWidth = 1f; // 吃掉行内剩余宽度（行 HLG 的 childForceExpandWidth = false 时仍生效）
-            rootLayout.preferredHeight = height;
-            rootLayout.minHeight = height;
+            rootLayout.preferredHeight = fieldHeight;
+            rootLayout.minHeight = fieldHeight;
 
             // 交互主体：不激活状态下把引用挂齐，最后一步再激活（约束 ①）。
             GameObject sliderObject = NewUIObject("slider", root.transform);
@@ -63,54 +93,96 @@ namespace DebugPlus.UI.Component
             GameObject background = NewUIObject("background", sliderObject.transform);
             Stretch(background);
             var backgroundImage = background.AddComponent<Image>();
-            backgroundImage.color = new Color(0.08f, 0.09f, 0.11f, 1f);
+            backgroundImage.color = current.TrackColor; // 颜色只从样式（默认源自 UIColors）取
             backgroundImage.raycastTarget = true;
 
             // 填充区容器 + 填充条（Slider 驱动填充条的锚点，容器只提供矩形）
             GameObject fillArea = NewUIObject("fillArea", sliderObject.transform);
-            StretchWithInset(fillArea, FillInset, FillInset);
+            StretchWithInset(fillArea, current.FillInset, current.FillInset);
             GameObject fill = NewUIObject("fill", fillArea.transform);
             var fillRect = Stretch(fill);
             var fillImage = fill.AddComponent<Image>();
-            fillImage.color = new Color(0.36f, 0.7f, 0.45f, 1f);
+            fillImage.color = current.FillColor;
             fillImage.raycastTarget = false; // 装饰层不拦射线
 
             // 滑块滑区容器 + 滑块（左右各留半个滑块宽，滑块才不会越界）
             GameObject handleArea = NewUIObject("handleArea", sliderObject.transform);
-            StretchWithInset(handleArea, HandleWidth * 0.5f, HandleWidth * 0.5f);
+            StretchWithInset(handleArea, current.HandleSize * 0.5f, current.HandleSize * 0.5f);
             GameObject handle = NewUIObject("handle", handleArea.transform);
             var handleRect = handle.GetComponent<RectTransform>(); // 约束 ②
             handleRect.anchorMin = new Vector2(0f, 0f);
             handleRect.anchorMax = new Vector2(0f, 1f);
             handleRect.pivot = new Vector2(0.5f, 0.5f);
             handleRect.anchoredPosition = Vector2.zero;
-            handleRect.sizeDelta = new Vector2(HandleWidth, 0f); // 高度撑满滑区
+            handleRect.sizeDelta = new Vector2(current.HandleSize, 0f); // 高度撑满滑区
             var handleImage = handle.AddComponent<Image>();
-            handleImage.color = new Color(0.88f, 0.9f, 0.92f, 1f);
+            handleImage.color = current.HandleColor;
             handleImage.raycastTarget = false;
 
             // 最后挂 KSlider：此时引用已就位，激活后的 Awake 不会 NRE。
             var field = root.AddComponent<SliderField>();
+            field.CurrentStyle = current;
             field.slider = sliderObject.AddComponent<KSlider>();
             field.slider.targetGraphic = backgroundImage;
             field.slider.transition = Selectable.Transition.None; // 纯代码不用 ColorTint（oni-ui）
             field.slider.direction = Slider.Direction.LeftToRight;
             field.slider.fillRect = fillRect;
             field.slider.handleRect = handleRect;
-            // ⚠️ 监听器**不在这里挂**：SetRange 设初值时若已挂上，会把从游戏读出来的现状当用户操作写回去。
-            //    由使用方在设完范围/初值后调用 AttachListener()（顺序契约见 ParameterRow.Bind）。
+            // ⚠️ 监听器**不在这里挂**：设初值时若已挂上，会把从游戏读出来的现状当用户操作写回去。
+            //    普通用法走 Bind()（内部保证顺序）；高级用法自己按 SetRange → SetFormatter → AttachListener 排。
 
             // 读数：与滑条同一栏、右对齐；TMP 独占一个 GameObject（约束 ③）。
-            field.readout = CreateReadout(root.transform);
+            field.readout = CreateReadout(root.transform, current);
 
             sliderObject.SetActive(true);
             return field;
         }
 
         /// <summary>
+        /// 用改过的样式重刷外观（尺寸与颜色）。
+        /// 一般不需要调用：创建时传样式、或直接改 <see cref="CurrentStyle"/> 的字段即可。
+        /// </summary>
+        public void ApplyStyle()
+        {
+            Refresh();
+        }
+
+        /// <summary>
+        /// 🔴 **绑定接口（推荐用法）**：把"读哪个值、写回哪里、怎么显示"一次性交给本组件，
+        /// 由组件内部保证调用顺序 —— 调用方**再也不可能**把顺序写错。
+        ///
+        /// 顺序为什么重要：先 <see cref="SetRange"/>（含初值）→ 再 <see cref="SetFormatter"/> →
+        /// **最后**才挂监听。若顺序颠倒，"从游戏读出来的现状"会被当成一次用户操作写回游戏。
+        /// </summary>
+        /// <param name="read">读当前值（本 Mod 的读值门槛、换算都由它负责）</param>
+        /// <param name="write">写回值（拖动/点击时调用；<b>写的是 UI 刻度上的值</b>）</param>
+        /// <param name="format">读数文本格式化（null = 用默认"保留一位小数"）</param>
+        /// <param name="min">最小值</param>
+        /// <param name="max">最大值</param>
+        /// <param name="wholeNumbers">是否只取整数刻度</param>
+        /// <param name="initial">初值；传 float.NaN 表示"从 <paramref name="read"/> 读"</param>
+        public SliderField Bind(System.Func<float> read, System.Action<float> write,
+            System.Func<float, string> format = null,
+            float min = 0f, float max = 1f, bool wholeNumbers = false, float initial = float.NaN)
+        {
+            float start = float.IsNaN(initial)
+                ? (read != null ? read() : min)
+                : initial;
+
+            SetRange(min, max, wholeNumbers, Mathf.Clamp(start, min, max));
+            SetFormatter(format);
+            if (write != null)
+            {
+                onChanged = write;
+                AttachListener();
+            }
+            return this;
+        }
+
+        /// <summary>
         /// 设范围与初值，此时**不通知任何回调** —— 初值是"从游戏读出来的现状"，不该被当成用户操作写回去。
         /// ⚠️ 不能用 `Slider.Set(value, false)`：它是 **protected**（IL 里是 `family`），mod 访问不到（编译报 CS0122）。
-        /// 顺序契约：先本方法，再 <see cref="SetFormatter"/>，最后 <see cref="AttachListener"/>。
+        /// 顺手用法请优先用 <see cref="Bind"/>；顺序契约：先本方法，再 <see cref="SetFormatter"/>，最后 <see cref="AttachListener"/>。
         /// </summary>
         public void SetRange(float min, float max, bool wholeNumbers, float initialValue)
         {
@@ -146,8 +218,8 @@ namespace DebugPlus.UI.Component
             slider.onValueChanged.AddListener(OnSliderChanged);
         }
 
-        /// <summary>按当前值刷新读数。</summary>
-        public void Refresh()
+        /// <summary>按当前值刷新读数。<b>可覆写</b>：派生类可加额外视觉反馈（但不要在这里写游戏逻辑）。</summary>
+        public virtual void Refresh()
         {
             if (readout == null)
             {
@@ -167,17 +239,17 @@ namespace DebugPlus.UI.Component
             }
         }
 
-        private static TextMeshProUGUI CreateReadout(Transform parent)
+        private static TextMeshProUGUI CreateReadout(Transform parent, Style style)
         {
             GameObject go = NewUIObject("readout", parent);
             // ⚠️ 本栏内部没有 LayoutGroup，读数的 LayoutElement 是**无效**的
-            //    ⇒ 必须用锚点自己定位：右对齐、占满高度、与滑条右端留 2px 间隙。
+            //    ⇒ 必须用锚点自己定位：右对齐、占满高度、与滑条右端留一点间隙。
             var rect = go.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 0.5f);
-            rect.anchoredPosition = new Vector2(-2f, 0f);
-            rect.sizeDelta = new Vector2(ReadoutWidth, 0f);
+            rect.anchoredPosition = new Vector2(-style.ReadoutGap, 0f);
+            rect.sizeDelta = new Vector2(style.ReadoutWidth, 0f);
 
             var tmp = go.AddComponent<TextMeshProUGUI>();
             if (Localization.FontAsset != null)
@@ -185,9 +257,9 @@ namespace DebugPlus.UI.Component
                 tmp.font = Localization.FontAsset; // 约束 ③
             }
             tmp.text = "";
-            tmp.fontSize = ReadoutFontSize;
+            tmp.fontSize = style.ReadoutFontSize;
             tmp.alignment = TextAlignmentOptions.MidlineRight;
-            tmp.color = Color.white;
+            tmp.color = style.ReadoutColor;
             tmp.raycastTarget = false; // 装饰层不拦射线
             return tmp;
         }

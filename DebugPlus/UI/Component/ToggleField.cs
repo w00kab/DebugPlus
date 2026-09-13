@@ -29,8 +29,33 @@ namespace DebugPlus.UI.Component
         /// <summary>方块边长（px）。</summary>
         public const float Size = 22f;
 
-        private const float FillInset = 2f;
-        private const float CheckFontSize = 13f;
+        /// <summary>
+        /// 外观样式：尺寸 + 四处颜色。默认值即本 Mod 的统一风格（颜色取自 <see cref="UIColors"/>）；
+        /// 想给某个实例换观感，构造一个改过的样式传进 <see cref="Create"/>，**不要改这里的默认值**。
+        /// </summary>
+        public class Style
+        {
+            /// <summary>方块边长。</summary>
+            public float Size = 22f;
+            /// <summary>填充层相对边框的内缩。</summary>
+            public float FillInset = 2f;
+            /// <summary>✓ 标记字号。</summary>
+            public float CheckFontSize = 13f;
+            /// <summary>边框色（未勾选与勾选共用同一个框）。</summary>
+            public Color BorderColor = UIColors.BorderBase;
+            /// <summary>填充色（勾选 = 成功绿；未勾选 = 中背景）。</summary>
+            public Color CheckedColor = UIColors.Success;
+            /// <summary>未勾选时的填充色。</summary>
+            public Color UncheckedColor = UIColors.Background;
+            /// <summary>✓ 标记颜色。</summary>
+            public Color CheckMarkColor = UIColors.BackgroundB;
+        }
+
+        /// <summary>默认样式（未显式传样式时使用）。</summary>
+        public static readonly Style DefaultStyle = new Style();
+
+        /// <summary>本实例的样式。</summary>
+        public Style CurrentStyle { get; private set; }
 
         private Image borderImage;
         private Image fillImage;
@@ -58,18 +83,40 @@ namespace DebugPlus.UI.Component
         /// <param name="initialValue">初始勾选状态</param>
         /// <param name="onChanged">点击回调（参数为点击后的状态）</param>
         public static ToggleField Create(Transform parent, bool initialValue = false,
-            System.Action<bool> onChanged = null)
+            System.Action<bool> onChanged = null, Style style = null)
         {
+            Style current = style ?? DefaultStyle;
             GameObject root = UIFactory.NewUIObject("toggleField", parent);
             // ①②：宽度与高度都显式给（只给 flexibleWidth 会被算成 0 宽）
-            UIFactory.AddFixedSize(root, Size, Size);
+            UIFactory.AddFixedSize(root, current.Size, current.Size);
 
             var field = root.AddComponent<ToggleField>();
+            field.CurrentStyle = current;
             field.onChanged = onChanged;
             field.value = initialValue;
             field.BuildVisual();
             field.ApplyVisual();
             return field;
+        }
+
+        /// <summary>
+        /// 🔴 **绑定接口**：把"读哪个值、写回哪里"交给本组件 —— 勾选由用户点击触发时，
+        /// 组件直接把新状态写回（调用方不必再写一个回调方法）。
+        /// 初值同样在挂载前写入且**不触发**写回（现状不该被当成用户操作）。
+        /// </summary>
+        /// <param name="read">读当前状态</param>
+        /// <param name="write">写回状态</param>
+        /// <param name="initial">初值；传 null 表示"从 <paramref name="read"/> 读"</param>
+        public ToggleField Bind(System.Func<bool> read, System.Action<bool> write, bool? initial = null)
+        {
+            bool start = initial ?? (read != null && read());
+            value = start;
+            ApplyVisual();
+            if (write != null)
+            {
+                onChanged = write;
+            }
+            return this;
         }
 
         /// <summary>
@@ -91,7 +138,7 @@ namespace DebugPlus.UI.Component
 
             ToggleField field = Create(row.transform, initialValue, onChanged);
 
-            var text = UIFactory.CreateText(row.transform, "label", label, 15f, UIColors.TextOnDark,
+            var text = UIFactory.CreateText(row.transform, "label", label, 15f, UIColors.RegularText,
                 TextAlignmentOptions.MidlineLeft, false);
             UIFactory.AddFlexibleWidth(text.gameObject);
             UIFactory.AddPreferredHeight(text.gameObject, rowHeight);
@@ -101,18 +148,18 @@ namespace DebugPlus.UI.Component
         private void BuildVisual()
         {
             // 边框 = 可交互层（不透明 + 接射线，③）
-            borderImage = UIFactory.AddBackground(gameObject, UIColors.BorderBase, true,
+            borderImage = UIFactory.AddBackground(gameObject, CurrentStyle.BorderColor, true,
                 UISpriteFactory.GetRoundedRect(32, 4));
 
-            // 填充层：内缩 2px
+            // 填充层：内缩
             GameObject fill = UIFactory.NewUIObject("fill", transform);
-            UIFactory.StretchWithInset(fill, FillInset, FillInset);
-            fillImage = UIFactory.AddDecoration(fill, UIColors.ControlTrack,
+            UIFactory.StretchWithInset(fill, CurrentStyle.FillInset, CurrentStyle.FillInset);
+            fillImage = UIFactory.AddDecoration(fill, CurrentStyle.UncheckedColor,
                 UISpriteFactory.GetRoundedRect(32, 3));
 
             // ✓ 标记（TMP 独占 GO + 显式中文字体资源）
-            checkText = UIFactory.CreateText(transform, "check", "✓", CheckFontSize,
-                UIColors.White, TextAlignmentOptions.Center, false);
+            checkText = UIFactory.CreateText(transform, "check", "✓", CurrentStyle.CheckFontSize,
+                CurrentStyle.CheckMarkColor, TextAlignmentOptions.Center, false);
             UIFactory.Stretch(checkText.gameObject);
 
             // 点击交互：transition = None（只用 onClick，避免 ColorTint 把方块颜色相乘变色）
@@ -165,23 +212,25 @@ namespace DebugPlus.UI.Component
             Notify(true);
         }
 
-        /// <summary>按当前状态刷新视觉（勾选 = 绿填充 + ✓；未勾选 = 轨道灰 + 无 ✓）。</summary>
-        private void ApplyVisual()
+        /// <summary>按当前状态刷新视觉（勾选 = 绿填充 + ✓；未勾选 = 中背景 + 无 ✓）。<b>可覆写</b>。</summary>
+        protected virtual void ApplyVisual()
         {
             if (fillImage != null)
             {
-                fillImage.color = value ? UIColors.Success : UIColors.ControlTrack;
+                fillImage.color = value ? CurrentStyle.CheckedColor : CurrentStyle.UncheckedColor;
             }
             if (checkText != null)
             {
                 checkText.text = value ? "✓" : string.Empty;
-                checkText.color = interactable ? UIColors.White : UIColors.TextDisabled;
+                checkText.color = interactable
+                    ? CurrentStyle.CheckMarkColor
+                    : UIColors.Disabled(CurrentStyle.CheckMarkColor);
             }
             if (borderImage != null)
             {
                 borderImage.color = interactable
-                    ? UIColors.BorderBase
-                    : UIColors.Disabled(UIColors.BorderBase);
+                    ? CurrentStyle.BorderColor
+                    : UIColors.Disabled(CurrentStyle.BorderColor);
             }
         }
 

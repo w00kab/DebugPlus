@@ -208,7 +208,7 @@ namespace DebugPlus.UI.View
             windowRect = rect;
 
             var image = windowRoot.AddComponent<Image>();
-            image.color = new Color(0.15f, 0.17f, 0.2f, 1f); // 不透明底
+            image.color = UIColors.BackgroundD; // 不透明底（颜色走统一色板）
             image.raycastTarget = true;                      // 拦住面板区域的点击
 
             var vlg = windowRoot.AddComponent<VerticalLayoutGroup>();
@@ -259,7 +259,7 @@ namespace DebugPlus.UI.View
             layout.minHeight = ButtonHeight;
 
             var image = go.AddComponent<Image>();
-            image.color = new Color(0.82f, 0.84f, 0.86f, 1f); // 可点击元素底色必须不透明
+            image.color = UIColors.Background; // 可点击元素底色必须不透明
             image.raycastTarget = true;
 
             // 纯代码场景用 Button（KButton 的 soundPlayer 是 [SerializeField]，纯代码会 NRE）；
@@ -272,13 +272,13 @@ namespace DebugPlus.UI.View
                 onClick();
             });
 
-            CreateText(go, "label", label, 0f, 16f, false, new Color(0.1f, 0.1f, 0.1f, 1f));
+            CreateText(go, "label", label, 0f, 16f, false, UIColors.RegularText);
         }
 
         /// <summary>创建一行文字（TMP 独占一个 GameObject：TMP 与 Image 同 GO 会冲突）。</summary>
         private static TextMeshProUGUI CreateText(GameObject parent, string name, string text, float height, float fontSize)
         {
-            return CreateText(parent, name, text, height, fontSize, true, Color.white);
+            return CreateText(parent, name, text, height, fontSize, true, UIColors.PrimaryText);
         }
 
         private static TextMeshProUGUI CreateText(GameObject parent, string name, string text, float height,
