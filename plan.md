@@ -143,9 +143,18 @@
   - 内容区自建：标题 / 目标名 / 参数行位 / 关闭按钮；布局遵守 oni-ui 规则（根 VLG → 行 HLG 一层嵌套、`childForceExpandHeight = false`、TMP 显式赋 `Localization.FontAsset`、纯代码用 `Button` 且 `transition = None`、装饰层 `raycastTarget = false`）
   - **时间中立**：`pause = false`（原版默认 `true` 会改掉玩家自己按下的暂停）；关闭走 `Deactivate()`（原版会销毁实例，故"全局仅一个"实现为"已有实例就不再叠第二个"）
 - **参数行工厂（纯代码自建，不克隆任何预制体**——素材来源依据见 §3.1 框架事实块）
-  - **落地（批 2b 已实现；2026-09-13 按用户拍板重构）**：`UI/Component/SliderField.cs`（**滑条 + 读数**组件，只管 UI）、
-    `UI/Component/ParameterRowFactory.cs`（行布局：标签 TMP + `SliderField`）、`UI/Component/ParameterRow.cs`（语义绑定）；
-    行高 **56**、插在按钮行之前
+  - **落地（批 2b 起；批 3-3 扩成"按参数类型分派"）**：`UI/Component/ParameterRowFactory.cs`（行布局 + **分派**）、
+    `UI/Component/ParameterRow.cs`（一行的语义手柄：持有 `Parameter` + 一个统一的 `Refresh`）、
+    控件四件套 `SliderField` / `NumberField` / `ToggleField` / `DropdownField`（各自只管 UI，不认识游戏类型）；
+    行高 **36**（= `ParameterRowFactory.RowHeight`，`ConfigPanel` 按它算窗口高度）、插在按钮行之前
+  - **参数类型 → 控件的分派（批 3-3 · B8）**：`Operations/Parameter.cs` 是个家族 ——
+    `NumericParameter`（`Control = Slider` / `Number` ⇒ 滑条 / 数值框）、`ToggleParameter`（⇒ 勾选方块）、
+    `ChoiceParameter`（⇒ 下拉，读写的**下标**而不是显示文本）；**显示形态由参数自己声明**（用户 2026-09-13 拍板），
+    不搞"按范围猜用的是哪种控件"；未接分派的类型由工厂建一行"暂不支持"占位 + 警告日志（刻意兜底，不崩不白屏）。
+    数值参数的显示分两层：`Format`（**不含单位**，给数值框的独立单位列）与 `Display = Format + Unit`（给滑条读数）。
+  - **浮层挂载点（批 3-3 · B7）**：`ConfigPanel` 内与 `window` **平级**的一层（铺满面板根、**不挂任何布局组**、
+    `SetAsLastSibling` 常驻最上层）。下拉列表这类"必须盖在面板之上、又不许参与行布局"的内容挂它下面 ——
+    挂在 `window` 里会被窗口矩形裁掉、被根 VLG 接管尺寸。定位走世界坐标 → 浮层本地坐标（不用 Canvas）。
   - **职责边界**：`SliderField` = 滑条怎么搭、怎么拖、读数怎么画（不认识任何游戏类型）；
     `ParameterRow` = 读哪个值、写回哪里（`Parameter` 决定单位与显示规则）；工厂只管"一行怎么排"
   - `ParameterRow.Bind` 的**顺序要求**：`SetRange`（范围 + 初值）→ `SetFormatter` → **最后** `AttachListener()` ——
@@ -156,11 +165,17 @@
     对已有 RectTransform 的 GO 再 `AddComponent<RectTransform>()` 时 **Unity 返回 `null`（不抛异常）**，随后对 null 设锚点才 NRE。
     ⇒ 约定：本 Mod 所有 UI GameObject 一律由统一的 `NewUIObject()` 创建（内部挂 RectTransform），
     调用方要改锚点/尺寸只能 `GetComponent<RectTransform>()`；`LayoutElement` / `Image` / `KSlider` 等则照常 `AddComponent`。
-  - **不用 `KNumberInputField`**（纯代码无法合法构造，见 §3.1）；后续行类型（勾选 `MultiToggle`、下拉选择器）待 P2，届时同样按"能不能纯代码构造"逐个核对框架源码
+  - **不用 `KNumberInputField`**（纯代码无法合法构造，见 §3.1）；行类型（勾选方块、下拉选择器）**已在批 3-3 落地**：
+    勾选用自建 `ToggleField`（两层 `Image` + `Button`，**没用** `MultiToggle`）；下拉用自建 `DropdownField`
+    （自建 header + 自绘浮层列表）—— 依据是"缺氧本体没有任何可纯代码构造的下拉"（调研结论见 NEXT_STEPS 批 3-3）
 - **实体能力模板注册表**：`实体特征 → 参数行定义列表`（选中实体后按特征匹配，生成对应行；无匹配则不显示按钮或提示"该实体无可调参数"）
   - **落地（批 2b 已实现）**：`Operations/OperationRegistry.cs`（`IOperation` 接口 + 登记表）；**判定与能力同源**——A1 的 `OperationRegistry.IsConfigurable(go)` 与面板的 `OperationRegistry.BuildParameters(go)` 走同一批登记项，故不可能出现"按钮在但面板空白"；初版只登记 `Operations/GrowthOperation.cs`
   - 面板按参数行数**动态算窗口高度**（无参数行时才显示"该实体暂无可调参数"提示）
-- 扩展槽：自研参数行类型（如"元素选择 + 温度 + 病菌"复合行）、二级面板（后续创造建筑套件用）
+- 扩展槽：自研参数行类型（如"元素选择 + 温度 + 病菌"复合行，可直接复用批 3-3 的数值框 + 下拉拼）、
+  二级面板（后续创造建筑套件用）
+- **控件用法范例区（批 3-3 起长期保留，用户拍板）**：`ConfigPanel` 底部的「控件自检 · 用法范例」——
+  四种控件各占一行、**走真分派**、值只落面板自己的字段（零游戏副作用）。
+  以后每加一个控件/参数类型，先在这里见人再上真实参数行。
 
 ### M2 · 暂停态操作层（Operations）★ 本 Mod 核心
 职责：承载"暂停下可执行"的具体操作实现。每条操作 = 一个自包含的动作（写值 / 生成替换 / 触发该实体自身流程），**不得依赖时间推进**。
