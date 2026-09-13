@@ -99,6 +99,21 @@ namespace DebugPlus.UI.Component
             return rect;
         }
 
+        /// <summary>
+        /// 靠父级左上角**点锚定**（`pivot = (0, 1)`）—— 定位的数值就是"左上角那个点"，
+        /// 浮层/弹出列表（下拉选项列表）靠它对齐到触发控件下方。
+        /// ⚠️ 点锚定下 `sizeDelta` 就是**绝对尺寸**（不是偏移量）。
+        /// </summary>
+        public static RectTransform AnchorTopLeft(GameObject go, float width, float height)
+        {
+            var rect = Rect(go);
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = new Vector2(width, height);
+            return rect;
+        }
+
         // ══════════════════ 布局组 ══════════════════
 
         /// <summary>

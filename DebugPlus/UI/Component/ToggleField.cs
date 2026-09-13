@@ -65,6 +65,9 @@ namespace DebugPlus.UI.Component
         private bool value;
         private bool interactable = true;
 
+        /// <summary>读当前状态的通道（<see cref="Bind"/> 时记下，供 <see cref="Refresh"/> 用）。</summary>
+        private System.Func<bool> read;
+
         /// <summary>用户点击改变勾选状态时触发；<b>程序化 <see cref="SetValue"/> 默认不触发</b>。</summary>
         public System.Action<bool> onChanged;
 
@@ -109,6 +112,7 @@ namespace DebugPlus.UI.Component
         /// <param name="initial">初值；传 null 表示"从 <paramref name="read"/> 读"</param>
         public ToggleField Bind(System.Func<bool> read, System.Action<bool> write, bool? initial = null)
         {
+            this.read = read; // 记下读通道：Refresh() 靠它重读
             bool start = initial ?? (read != null && read());
             value = start;
             ApplyVisual();
@@ -117,6 +121,18 @@ namespace DebugPlus.UI.Component
                 onChanged = write;
             }
             return this;
+        }
+
+        /// <summary>
+        /// 从参数侧重读并同步到界面（"游戏侧现值变了要刷一下"时用）。
+        /// 与 <see cref="SetValue"/> 一样**不触发** <see cref="onChanged"/> —— 刷新不是用户操作。
+        /// </summary>
+        public void Refresh()
+        {
+            if (read != null)
+            {
+                SetValue(read());
+            }
         }
 
         /// <summary>

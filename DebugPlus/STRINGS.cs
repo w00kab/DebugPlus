@@ -29,16 +29,28 @@ namespace DebugPlus
                 public static LocString PARAM_GROWTH = "生长进度";
                 public static LocString UNIT_PERCENT = "%";
 
-                // 控件自检区文案（批 3-2 临时挂载用；批 3-3 类型分派挂上后随代码整块删除）
-                public static LocString PANEL_SELFTEST_TITLE = "— 控件自检（临时 · 批 3-3 挂载后删）—";
-                public static LocString PANEL_SELFTEST_NUMBER = "数值框";
-                public static LocString PANEL_SELFTEST_TEXT = "输入框";
-                public static LocString PANEL_SELFTEST_TOGGLE = "勾选";
-                public static LocString PANEL_SELFTEST_TEXT_INITIAL = "点我输入中文abc";
-                // {0}=是否编辑中 {1}=编辑计数 {2}=数值框回读
-                public static LocString PANEL_SELFTEST_STATUS = "编辑中：{0} ｜ 计数 {1} ｜ 数值 {2}";
-                public static LocString PANEL_SELFTEST_YES = "是";
-                public static LocString PANEL_SELFTEST_NO = "否";
+                // 通用值文案（布尔参数的"是 / 否"等，供参数族与界面共用）
+                public static LocString VALUE_YES = "是";
+                public static LocString VALUE_NO = "否";
+
+                // 参数行的兜底提示
+                public static LocString PANEL_PARAM_UNSUPPORTED = "（暂不支持该参数类型：{0}）";
+                public static LocString PANEL_CHOICE_EMPTY = "（无选项）";
+
+                // 控件自检 · 用法范例区（批 3-2 起是本 Mod 控件的实机入口；
+                // 批 3-3 起改用**真分派**渲染，并长期保留：它同时是"控件怎么用"的活范例，
+                // 以及新控件/新参数类型的现场验证台。写入只落面板自己的字段，不碰游戏。）
+                public static LocString PANEL_SELFCHECK_TITLE = "— 控件自检 · 用法范例 —";
+                public static LocString PANEL_SELFCHECK_SLIDER = "滑条";
+                public static LocString PANEL_SELFCHECK_NUMBER = "数值框";
+                public static LocString PANEL_SELFCHECK_TEXT = "输入框";
+                public static LocString PANEL_SELFCHECK_TOGGLE = "勾选";
+                public static LocString PANEL_SELFCHECK_CHOICE = "下拉";
+                public static LocString PANEL_SELFCHECK_TEXT_INITIAL = "点我输入中文abc";
+                // 下拉范例的选项文本模板（{0} = 序号）
+                public static LocString PANEL_SELFCHECK_OPTION = "选项{0}";
+                // {0}=是否编辑中 {1}=编辑计数 {2}=数值框回读 {3}=下拉当前选项
+                public static LocString PANEL_SELFCHECK_STATUS = "编辑中：{0} ｜ 计数 {1} ｜ 数值 {2} ｜ 下拉 {3}";
             }
         }
     }

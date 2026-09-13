@@ -44,8 +44,12 @@ namespace DebugPlus.Operations
 
     /// <summary>
     /// 生长进度参数。滑条单位是**百分比 0–100**（整数刻度），写回时换算成原版要的 0–1 比例。
+    ///
+    /// ⚠️ 批 3-3 起基类由 <see cref="Parameter"/> 改为 <see cref="NumericParameter"/>（浮点数值家族）。
+    /// 本参数**不覆写** <see cref="NumericParameter.Control"/> ⇒ 取默认值"滑条"，
+    /// 即已经在实机上验收过的观感（滑条 + 右侧 % 读数）**一个字都不变**。
     /// </summary>
-    public sealed class GrowthParameter : Parameter
+    public sealed class GrowthParameter : NumericParameter
     {
         private readonly IManageGrowingStates states;
 
@@ -94,9 +98,15 @@ namespace DebugPlus.Operations
             states.OverrideMaturityLevel(Mathf.Clamp01(value / 100f));
         }
 
-        public override string Display(float value)
+        /// <summary>
+        /// 显示成整数（成熟度是整百分点，小数位没意义）。
+        /// ⚠️ 覆写的是 <see cref="NumericParameter.Format"/>（**不含单位**）而不是 <c>Display</c>：
+        /// 基类的 `Display = Format + Unit` 会自动补上 "%"，这样滑条读数仍是「50%」（观感不变），
+        /// 而如果将来把本参数改成数值框显示，框里也只会是纯数字「50」，不会拼两遍单位。
+        /// </summary>
+        public override string Format(float value)
         {
-            return Mathf.RoundToInt(value).ToString() + Unit;
+            return Mathf.RoundToInt(value).ToString();
         }
     }
 }

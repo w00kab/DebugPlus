@@ -19,7 +19,8 @@ namespace DebugPlus.UI.Component
     /// 档位关系（相邻档必须看得出边界，故各自独立取值，不做"同色多角色"）：
     ///   BackgroundWhite > BackgroundW > BackgroundB > Background > BackgroundD > BackgroundDeep
     ///
-    /// 禁用态一律由 <see cref="Disabled"/> 现算，**不单独占一个色值**。
+    /// 禁用态一律由 <see cref="Disabled"/> 现算，**不单独占一个色值**；
+    /// 点击承接层的颜色同理由 <see cref="ClickCatcher"/> 现算（两者都是"改动修饰"，不是新颜色）。
     /// </summary>
     public static class UIColors
     {
@@ -97,6 +98,20 @@ namespace DebugPlus.UI.Component
         public static Color Disabled(Color color)
         {
             return new Color(color.r * 0.6f, color.g * 0.6f, color.b * 0.6f, color.a);
+        }
+
+        /// <summary>
+        /// 把任意颜色变成**点击承接层**的颜色：视觉上不可辨，但仍能被射线命中。
+        /// 为什么需要它：下拉列表展开时要铺一层全屏点击层，接住"面板别处的点击"
+        /// （否则那一下会**同时**打到下层控件上：既收起列表又拖了滑条）。
+        /// 而 `alpha = 0` 的图元会被剔除、连点击都收不到（oni-ui 规则 14："透明底按钮收不到 hover/点击"），
+        /// 所以只能给一个"非零但看不出"的透明度 —— 1/255 是这两者之间最小的折中。
+        /// 与 <see cref="Disabled"/> 同类：**不占独立色值**，由已有角色色现算。
+        /// 传入者建议用最深的背景角色，万一被看见也只是一层几乎不可见的暗痕。
+        /// </summary>
+        public static Color ClickCatcher(Color role)
+        {
+            return new Color(role.r, role.g, role.b, 1f / 255f);
         }
     }
 }
