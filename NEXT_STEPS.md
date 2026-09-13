@@ -27,11 +27,12 @@
     `bin/` 与 `*.dll` 经 `git check-ignore` 确认被忽略。
   - ⚠️ **批 2a 的代码已提交**：`2a29d44`（`feat(M1): 批 2a 实体配置弹窗外壳`，8 文件 / +534 −46）。
 - 已部署：`%USERPROFILE%\Documents\Klei\OxygenNotIncluded\mods\Dev\Debug Plus\`
-  （体积演进：批 1 = 4608 B → 批 2a = 11776 B → 批 2b = 16896 B → **批 3 = 27136 B**）。
-  **当前部署件**：`DebugPlus.dll` = 27136 B，SHA256 `E68D2A17793A6A7F…`（2026-09-13 13:35:44），
+  （体积演进：批 1 = 4608 B → 批 2a = 11776 B → 批 2b = 16896 B → 批 3 = 27136 B → **批 3-2 = 33792 B**）。
+  **当前部署件**：`DebugPlus.dll` = 33792 B，SHA256 `4F3369916493BA61…`（2026-09-13 13:57:22），
   本地 `bin/Release` 与部署目录 SHA256 一致。
-  ⚠️ 此后对 `SliderField.cs` 只改了**注释**（无逻辑变化），故未重新构建部署，部署件行为与源码一致。
-- ✅ **批 3-1 · UI 构件化：已实现、编译、部署完成**（详见 §1.5）。
+- ✅ **批 3-2 · 数值框 + 输入框 + 编辑期吞键：已实现、编译、部署完成** → **⏸ 待实机验证，但本批还没有任何参数行用它**
+  （挂载与类型分派是批 3-3）⇒ 实机验证入口要等批 3-3，验证清单见 §1.5 末与 §4 第 13–17 条。
+- 批 3-2 的代码已提交：`d1c8d13`（`feat(M1): 批 3-2 数值框、输入框与编辑期吞键`，3 文件 / +804）。
 - 🔧 **批 3 · 滑条排障（2026-09-13 下午，用户实机逐步定位）** —— 两个真实根因都是**几何**，不是颜色：
   ① `bar` 列漏给高度 ⇒ 整条滑条 0 像素（看不见，但**能拖**，因为拖动命中的是滑条根物体）；
   ② 填充条水平内缩比槽底大 8px ⇒ **没被填充盖住的槽底直接显示**（绿色旁露底色）。
@@ -75,17 +76,49 @@
 - 组件约定：静态 `Create(parent, style?)` + 内嵌 `Style` 类（含 `DefaultStyle`）
   + `Bind(read, write, …)` 把调用顺序（范围/初值 → 格式化 → 挂监听）封在组件内部。
 
-### 批 3-2 · 数值输入与按键拦截 —— ⏳ 方案已批准，**尚未开工**（未写一行代码）
+### 批 3-2 · 数值输入与按键拦截 —— ✅ 已完成（编译+部署通过，⏸ 待实机验证）
 
-- **B4 `UI/Component/NumberField.cs`**：数值输入控件（标签 + ◄/► 自适应步进 + 点击进入编辑 + 单位后缀）。
-- **B5 `UI/Component/TextField.cs`**：`: TMP_InputField` 自建输入框（`TextArea → Text` 结构；
-  光标交给 TMP 的 `OnEnable`，聚焦期间每帧同步光标矩形）。
-- **B6 `Patches/InputHandler_HandleKeyDown_Patch.cs`**：编辑中/面板展开时**吞掉游戏热键**。
-  ⚠️ 风险最高的一项，动手前必须先读 `KInputHandler.cs`；必要时可推迟。
+- **B4 `UI/Component/NumberField.cs`（已实现）**：数值框 = 一栏 HLG：
+  `◄ 步进键` / `TextField`（弹性宽）/ `► 步进键` / `单位后缀`（无单位时整体隐藏，布局自动跳过）。
+  **数值显示与编辑合用一个 `<TextField>`**（点它即聚焦编辑，退出编辑回到只读显示）——
+  这样一栏里只有一个文本控件，避免"读数与编辑器两个节点抢同一列"而被迫 HLG→HLG 嵌套（oni-ui 规则 5）。
+  - 与 `SliderField` 同款约定：静态 `Create(parent, style)` + 内嵌 `Style`(+`DefaultStyle`) +
+    `Bind(read, write, format, min, max, wholeNumbers, step, unit, initial)`；
+    顺序契约 = 先 `SetRange`（范围+初值，不写游戏）→ `SetFormatter` → `SetUnit` → 最后接上写回通道。
+  - **步进档位（用户 2026-09-13 拍板：默认推导 + 可覆盖）**：`Style.Step > 0` 用它；
+    否则 `DeriveStep(min, max, wholeNumbers)` 按范围推导 —— 让约 100 次点击走完全程，
+    档位取整齐的 1/2/5×10ⁿ（[0,100]→1、[0,1000]→10、[0,5000]→50、[0,1]→0.01；整数刻度至少 1）。
+  - 提交语义：回车提交；**Esc 取消**（TMP 会先把文本还原成原文 ⇒ 用 `TextField.WasCanceled` 判定，
+    不写回）与**解析失败**都静默回退到当前值，绝不把半截输入写进游戏。
+  - `format` 只负责数值本身的显示形式，**不在里面拼单位**（单位是独立一列，编辑时必须是纯数字）。
+  - 步进键文字默认用 ASCII 的 `"<"` / `">"`：ONI 的 SDF 字体不含部分 Unicode 装饰符号
+    （§3 与 oni-ui 规则 6 的"装饰符号空白"），行有余量时可改 `Style.DecreaseLabel/IncreaseLabel` 为 `◄/►` 实机看效果。
+- **B5 `UI/Component/TextField.cs`（已实现）**：内部组合**原生** `TMP_InputField`（**不派生** `KInputTextField`），
+  结构 `root(不透明可交互底 Image)` → `textArea(RectMask2D；= textViewport)` → `text(独占 GO；= textComponent)`。
+  - 三条依据（逐行核对本体代码，见文件头注释）：`textViewport`/`textComponent`/`placeholder` 是可写公开属性；
+    **光标完全交给 TMP**（`OnEnable` :1248-1263 自建 Caret、`LateUpdate` :1612-1679 每帧 `AssignPositioningIfNeeded` 同步）；
+    `onEndEdit` 只由 `ReleaseSelection()` 发出，而 `DeactivateInputField` 在 `resetOnDeActivation` 为真时必调它 ⇒
+    回车与失焦都会走到（`resetOnDeActivation` 已在代码里显式置 true）。
+    ⇒ 唯一要守的是"**OnEnable 跑之前 textComponent 已就位**"：先 `SetActive(false)` → 挂引用 → 再激活。
+  - 不派生 `KInputTextField` 的理由：它只多"值变化延迟通知 / 手柄输入"，且其无参构造在反编译里是 **private**。
+  - 静态 `TextField.IsEditing`（编辑计数，`OnDisable/OnDestroy` 必归零）是吞键补丁唯一认的开关。
+- **B6 `Patches/InputHandler_HandleEvent_Patch.cs`（已实现）**：`[HarmonyPatch(typeof(KInputHandler), nameof(KInputHandler.HandleEvent))]`
+  的 Prefix —— `TextField.IsEditing` 为真时 `e.Consumed = true; return false;`。
+  - 目标选择依据：`KInputController.Dispatch()`（:242-256）是全工程**唯一**调 `HandleEvent` 的地方 ⇒ 它是热键总闸门；
+    `KInputEvent.Consumed` 是公开可写属性（:19）。**已对游戏真源 `Assembly-CSharp-firstpass.dll` 反射复核签名成立**。
+  - **口径收窄（用户 2026-09-13 拍板）**：只在"**正在编辑**"时吞，**不按"面板展开"吞** ——
+    Esc 关面板靠 `KScreenManager.OnKeyDown` 派发到 `KModalScreen.OnKeyDown`，它同样在这个根 handler 之下，
+    面板一展开就吞键会把 Esc 一起吞掉、打断已验收行为。收窄后是**两级 Esc**：编辑中 Esc = 退出编辑，再按才关面板。
+  - 吞键不妨碍打字：输入框收字是 TMP 直接读 Unity 输入（`Event.PopEvent`），不走 KInput 链。
+  - 文件/类名按命名规范跟随真实补丁目标（施工单原写 `InputHandler_HandleKeyDown_Patch`，实际目标是 `HandleEvent`）。
+
 - 参考事实（勿重复踩）：`KNumberInputField` **不可纯代码构造**（`KInputField.inputField` 是
   `[SerializeField] private KInputTextField`，`field` 只读）⇒ 数值控件只能自建；
   `plan.md` §3.1 那句"不使用数字输入框"**指的是不用原版 `KNumberInputField`**，
   **不排斥自建 `NumberField`**，两者不矛盾。
+- 本批补记的原版事实（都写进代码注释了）：原版"输入框聚焦就不处理热键"只有
+  `CameraController.WithinInputField()`（CameraController.cs:527-540）这一处，且**只保护 CameraController 自己**
+  （:572 / :801），其余热键消费者（SpeedControlScreen / ToolMenu / PlanScreen / OverlayMenu）都没有这层保护。
 
 ### 批 3-3 · 面板挂载与参数类型分派 —— ⏳ 未开工
 
@@ -251,12 +284,27 @@ plan.md §七 原有 4 条（留待后续批次）：
 11. `BabyMonitor.Instance.SpawnAdult()` 在沙盒/本 Mod 生成出的实体上调用是否安全。
 12. 用户菜单按钮在**非建筑实体**（植物/动物/间歇泉）上是否正常显示。
 
+批 3-2 专项（**⚠️ 前提：本批只交付构件，面板里还没有任何行用到它 —— 需等批 3-3 把数值行挂上去，
+或用一次临时挂载才能看到。以下 5 条先记在这里，不在本轮实机范围内**）：
+
+13. 数值框：`◄` / `►` 是否各走一格（档位按范围推导，见 §1.5 的 `DeriveStep`）；点数值是否进入编辑、
+    回车是否提交并回到只读显示；**步进键文字是不是空白方块**（默认用 ASCII `"<"` / `">"` 就是防这个）。
+14. 编辑态手感：**Esc = 退出编辑且不写回**（文本还原），解析失败（空串 / 半截输入）也**不写游戏**；
+    **两级 Esc**（编辑中 Esc 退编辑、再按 Esc 关面板）是否符合预期。
+15. **吞键是否生效**：编辑中按 `1/2/3`（游戏速度）、空格（暂停）、`WASD`（镜头）是否**不再触发游戏热键**；
+    光标/选区/打字是否一切正常（吞键不该影响打字）。
+16. **吞键是否会漏/会卡死**：不在编辑时热键行为与不加补丁完全一致；关闭面板（或编辑中关面板）之后
+    再按热键要立刻恢复正常（编辑计数若没归零会导致"整个游戏键盘失灵"，是最需要盯的一种回归）。
+17. 输入框外观：底/文字/**光标**（TMP 默认光标是深灰，代码里显式改成白）是否看得见；长文本是否被裁剪在框内。
+
 ## 5. 待拍板 / 未决
 
-- **是否推送仍未定**：本地 `main` 领先 `origin/main` **7 个提交**（截至 2026-09-13 13:36，
-  最新 `364f3f3` 滑条修复），等用户说推再推（仓库纪律：不擅自 push）。
+- **是否推送仍未定**：`origin/main` 已到 `3211342`（此前的批 3 提交已推送），
+  本次批 3-2 的提交尚在本地位列（等用户说推再推，仓库纪律：不擅自 push）。
   ⚠️ 用户 2026-09-13 明确要求：**一次调试不要每小步都提交** —— 改完并验证通过后再提交，
   中间探索性改动先不提交；那 5 个滑条调试提交已按用户要求压成 1 个。
+- **批 3-2 尚缺"实机入口"**：本批只交付构件，`ConfigPanel` 里没有任何行用它，实机看不到 ⇒
+  验证要么等批 3-3 的挂载与类型分派，要么由用户批准一次"临时挂载"（属批 3-3 范围，待拍板）。
 - **滑条来源已定案**（批 2b 执行中拍板，已写进 plan.md §3.1）：**纯代码自建 `KSlider`**，不用 `KNumberInputField`；
   若实机上滑条手感/外观不满意，可换的余地是"克隆场景里现存的原版滑条实例"（需要先有带滑条界面的建筑被选中）。
 - 按钮图标现取原版现存 sprite **`action_switch_toggle`**（`ComplexFabricator.cs:243` 在用）；实机看效果后若要换，改一处字符串，并落进 `Assets/README.md`。
